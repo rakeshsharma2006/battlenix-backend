@@ -1,0 +1,58 @@
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 16:31:57"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 16:31:58"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 16:32:05"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 16:32:05"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 16:32:32"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 16:32:32"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 16:34:19"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 16:34:19"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 16:50:08"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 16:50:08"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 16:51:14"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 16:51:14"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 16:52:30"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 16:52:30"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 17:24:44"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 17:24:44"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 17:25:59"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 17:25:59"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 17:26:29"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 17:26:29"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 17:28:11"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 17:28:11"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 18:54:25"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 18:54:25"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 18:57:54"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 18:57:55"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 18:58:03"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 18:58:03"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 19:02:07"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:02:07"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 19:02:28"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:02:29"}
+{"level":"info","message":"Server is running on port 5000","service":"battlenix-api","timestamp":"2026-04-02 19:03:32"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:03:32"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:03:56"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:03:56"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:03:56"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:05:20"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:05:20"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:05:20"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:13:55"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:13:55"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:13:55"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:15:45"}
+{"intervalMs":300000,"level":"info","message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:15:46"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:15:46"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:18:48"}
+{"intervalMs":60000,"level":"info","lockTimeoutMinutes":2,"message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:18:48"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:18:48"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:20:26"}
+{"intervalMs":60000,"level":"info","lockTimeoutMinutes":2,"message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:20:26"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:20:26"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:20:57"}
+{"intervalMs":60000,"level":"info","lockTimeoutMinutes":2,"message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:20:57"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:20:57"}
+{"level":"info","message":"Server is running","port":"5000","service":"battlenix-api","timestamp":"2026-04-02 19:21:09"}
+{"intervalMs":60000,"level":"info","lockTimeoutMinutes":2,"message":"Payment cleanup job started","service":"battlenix-api","timeoutMinutes":15,"timestamp":"2026-04-02 19:21:09"}
+{"intervalMs":30000,"level":"info","message":"Match lifecycle job started","service":"battlenix-api","timestamp":"2026-04-02 19:21:09"}
