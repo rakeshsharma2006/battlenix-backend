@@ -1,9 +1,27 @@
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const { issueAuthTokens, rotateRefreshToken, signAccessToken } = require('../services/tokenService');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'battlenix_jwt_secret_change_in_prod';
-const JWT_EXPIRES_IN = '7d';
+const buildUserPayload = (user) => ({
+  _id: user._id,
+  username: user.username,
+  email: user.email,
+  role: user.role,
+  trustScore: user.trustScore ?? undefined,
+  gameUID: user.gameUID ?? null,
+  gameName: user.gameName ?? null,
+  upiId: user.upiId ?? null,
+});
+
+const buildAuthResponse = async (user, message) => {
+  const tokens = await issueAuthTokens(user);
+
+  return {
+    message,
+    ...tokens,
+    user: buildUserPayload(user),
+  };
+};
 
 const register = async (req, res) => {
   try {
@@ -16,22 +34,9 @@ const register = async (req, res) => {
 
     const user = await User.create({ username, email, password });
 
-    const token = jwt.sign(
-      { _id: user._id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+    return res.status(201).json(
+      await buildAuthResponse(user, 'User registered successfully')
     );
-
-    return res.status(201).json({
-      message: 'User registered successfully',
-      token,
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    });
   } catch (error) {
     logger.error('Register error', { error: error.message });
     return res.status(500).json({ message: 'Registration failed', error: error.message });
@@ -52,25 +57,46 @@ const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    const token = jwt.sign(
-      { _id: user._id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+    return res.status(200).json(
+      await buildAuthResponse(user, 'Login successful')
     );
-
-    return res.status(200).json({
-      message: 'Login successful',
-      token,
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    });
   } catch (error) {
     logger.error('Login error', { error: error.message });
     return res.status(500).json({ message: 'Login failed', error: error.message });
+  }
+};
+
+const refresh = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({ message: 'Token expired or invalid' });
+    }
+
+    const rotated = await rotateRefreshToken(refreshToken);
+
+    // Fetch full profile so the response payload is complete
+    const user = await User.findById(rotated.userId)
+      .select('email role username trustScore gameUID gameName upiId')
+      .lean();
+
+    if (!user) {
+      return res.status(401).json({ message: 'Token expired or invalid' });
+    }
+
+    const accessToken = signAccessToken(user);
+
+    return res.status(200).json({
+      message: 'Token refreshed successfully',
+      token: accessToken,
+      accessToken,
+      refreshToken: rotated.refreshToken,
+      user: buildUserPayload(user),
+    });
+  } catch (error) {
+    logger.warn('Refresh token rejected', { error: error.message });
+    return res.status(401).json({ message: 'Token expired or invalid' });
   }
 };
 
@@ -88,4 +114,4 @@ const getMe = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe };
+module.exports = { register, login, refresh, getMe };

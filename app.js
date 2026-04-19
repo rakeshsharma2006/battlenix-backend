@@ -2,13 +2,22 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const routes = require('./src/routes');
+const passport = require('./src/config/passport');
 const { globalLimiter } = require('./src/middlewares/rateLimiters');
 
 const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: [
+    /^http:\/\/localhost:\d+$/,
+    /^http:\/\/127\.0\.0\.1:\d+$/,
+    /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
+    /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/,
+  ],
+  credentials: true,
+}));
 
 app.use('/payment/webhook', express.json({
   verify: (req, res, buf) => {
@@ -16,8 +25,19 @@ app.use('/payment/webhook', express.json({
   },
 }));
 
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+app.use((req, res, next) => {
+  if (req.path.startsWith('/support')) {
+    return next();
+  }
+  express.json({ limit: '100kb' })(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/support')) {
+    return next();
+  }
+  express.urlencoded({ extended: true, limit: '100kb' })(req, res, next);
+});
+app.use(passport.initialize());
 app.use(globalLimiter);
 
 app.use('/', routes);

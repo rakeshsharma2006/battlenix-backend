@@ -5,6 +5,7 @@ const connectDB = require('./src/config/db');
 const logger = require('./src/utils/logger');
 const { startPaymentCleanupJob } = require('./src/services/paymentCleanup');
 const { startMatchLifecycleJob } = require('./src/services/matchLifecycleJob');
+const { startLeaderboardResetJob } = require('./src/services/leaderboardResetJob');
 const { initializeSocket } = require('./src/services/socketService');
 
 const PORT = process.env.PORT || 5000;
@@ -18,6 +19,7 @@ connectDB()
       logger.info('Server is running', { port: PORT });
       startPaymentCleanupJob();
       startMatchLifecycleJob();
+      startLeaderboardResetJob();
     });
   })
   .catch((err) => {

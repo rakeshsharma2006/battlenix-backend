@@ -1,0 +1,124 @@
+{"error":"You can only view chats for matches you created","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-11 11:11:21"}
+{"error":"You can only view chats for matches you created","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-11 11:11:22"}
+{"error":"You can only view chats for matches you created","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-11 22:30:51"}
+{"error":"You can only view chats for matches you created","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-11 22:30:52"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-11 22:42:46"}
+{"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","matchId":"69d228a70c7ab601495e0b7b","message":"setMatchStatus error","service":"battlenix-api","timestamp":"2026-04-12 07:48:46"}
+{"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","matchId":"69d228a70c7ab601495e0b7b","message":"setMatchStatus error","service":"battlenix-api","timestamp":"2026-04-12 07:48:54"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-12 08:34:45"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-12 08:34:45"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-12 08:35:12"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-12 08:35:13"}
+{"error":"getaddrinfo ENOTFOUND ac-x8primc-shard-00-01.l0ra8vv.mongodb.net","level":"error","message":"Match lifecycle sweep failed","service":"battlenix-api","timestamp":"2026-04-12 15:07:10"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 17:38:50"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:52:03"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:52:05"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:52:05"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:52:05"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:52:06"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:52:06"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:52:07"}
+{"error":"write ECONNRESET","level":"error","message":"Match lifecycle sweep failed","service":"battlenix-api","timestamp":"2026-04-12 20:59:50"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-12 20:59:52"}
+{"error":"B0370000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"Match lifecycle sweep failed","service":"battlenix-api","timestamp":"2026-04-12 21:06:43"}
+{"error":"Connection pool for ac-x8primc-shard-00-01.l0ra8vv.mongodb.net:27017 was cleared because another operation failed with: \"B0370000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n\"","level":"error","message":"listMatches error","service":"battlenix-api","timestamp":"2026-04-12 21:06:59"}
+{"error":"B0370000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"listMatches error","service":"battlenix-api","timestamp":"2026-04-12 21:07:45"}
+{"error":"48270000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"listMatches error","service":"battlenix-api","timestamp":"2026-04-12 21:11:58"}
+{"error":"341D0000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"Leaderboard reset job failed","service":"battlenix-api","timestamp":"2026-04-12 21:17:44"}
+{"error":"341D0000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"listMatches error","service":"battlenix-api","timestamp":"2026-04-12 21:17:48"}
+{"error":"Connection pool for ac-x8primc-shard-00-01.l0ra8vv.mongodb.net:27017 was cleared because another operation failed with: \"30350000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n\"","level":"error","message":"Payment cleanup error","service":"battlenix-api","timestamp":"2026-04-12 21:20:10"}
+{"error":"Connection pool for ac-x8primc-shard-00-01.l0ra8vv.mongodb.net:27017 was cleared because another operation failed with: \"30350000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n\"","level":"error","message":"Leaderboard reset job failed","service":"battlenix-api","timestamp":"2026-04-12 21:20:10"}
+{"error":"30350000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"Match lifecycle sweep failed","service":"battlenix-api","timestamp":"2026-04-12 21:20:13"}
+{"error":"583E0000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"Match lifecycle sweep failed","service":"battlenix-api","timestamp":"2026-04-12 21:22:12"}
+{"error":"5C430000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"Leaderboard reset job failed","service":"battlenix-api","timestamp":"2026-04-12 21:24:07"}
+{"error":"Connection pool for ac-x8primc-shard-00-01.l0ra8vv.mongodb.net:27017 was cleared because another operation failed with: \"A4360000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n\"","level":"error","message":"Match lifecycle sweep failed","service":"battlenix-api","timestamp":"2026-04-12 21:25:39"}
+{"error":"A4360000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"Leaderboard reset job failed","service":"battlenix-api","timestamp":"2026-04-12 21:25:39"}
+{"error":"A4360000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:openssl\\ssl\\record\\rec_layer_s3.c:916:SSL alert number 80\n","level":"error","message":"listMatches error","service":"battlenix-api","timestamp":"2026-04-12 21:25:53"}
+{"level":"error","message":"createOrder error","service":"battlenix-api","timestamp":"2026-04-13 18:16:57"}
+{"level":"error","message":"createOrder error","service":"battlenix-api","timestamp":"2026-04-13 18:17:03"}
+{"level":"error","message":"createOrder error","service":"battlenix-api","timestamp":"2026-04-13 18:58:14"}
+{"level":"error","message":"createOrder error","service":"battlenix-api","timestamp":"2026-04-13 18:59:35"}
+{"full":"{\"statusCode\":400,\"error\":{\"code\":\"BAD_REQUEST_ERROR\",\"description\":\"receipt: the length must be no more than 40.\",\"metadata\":{},\"reason\":\"input_validation_failed\",\"source\":\"business\",\"step\":\"payment_initiation\"}}","level":"error","message":"createOrder error","service":"battlenix-api","timestamp":"2026-04-13 19:21:36"}
+{"error":"Verification: Test logging format enhancement","full":"{}","level":"error","message":"createOrder error","service":"battlenix-api","stack":"Error: Verification: Test logging format enhancement\n    at createOrder (F:\\cd projects\\battlenix\\src\\controllers\\paymentController.js:851:11)\n    at Layer.handle [as handle_request] (F:\\cd projects\\battlenix\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (F:\\cd projects\\battlenix\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at F:\\cd projects\\battlenix\\src\\middlewares\\validationMiddleware.js:22:5\n    at Layer.handle [as handle_request] (F:\\cd projects\\battlenix\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (F:\\cd projects\\battlenix\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at F:\\cd projects\\battlenix\\node_modules\\express-rate-limit\\dist\\index.cjs:958:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async F:\\cd projects\\battlenix\\node_modules\\express-rate-limit\\dist\\index.cjs:830:5","timestamp":"2026-04-13 19:28:00"}
+{"full":"{\"statusCode\":400,\"error\":{\"code\":\"BAD_REQUEST_ERROR\",\"description\":\"receipt: the length must be no more than 40.\",\"metadata\":{},\"reason\":\"input_validation_failed\",\"source\":\"business\",\"step\":\"payment_initiation\"}}","level":"error","message":"createOrder error","service":"battlenix-api","timestamp":"2026-04-13 19:39:17"}
+{"level":"error","message":"Failed to fetch payment status from Razorpay during verify","paymentId":"69dcfaf549d7f34b8f74c779","razorpay_order_id":"order_Sd0V0U4B3rbS6X","razorpay_payment_id":"pay_test_1776089860647","service":"battlenix-api","timestamp":"2026-04-13 19:47:45"}
+{"level":"error","message":"Failed to fetch payment status from Razorpay during verify","paymentId":"69dd252f7f376f1eae76245e","razorpay_order_id":"order_Sd3ZKwpFwVFvcZ","razorpay_payment_id":"pay_test_1776100670826","service":"battlenix-api","timestamp":"2026-04-13 22:47:51"}
+{"level":"error","message":"Failed to fetch payment status from Razorpay during verify","paymentId":"69ddae7fc63afaf8d695bbf0","razorpay_order_id":"order_SdDYCw05J1Abgb","razorpay_payment_id":"pay_test_1776135816088","service":"battlenix-api","timestamp":"2026-04-14 08:33:36"}
+{"level":"error","message":"Failed to fetch payment status from Razorpay during verify","paymentId":"69ddbd1bc63afaf8d695c1d2","razorpay_order_id":"order_SdEc01BQ9k1avf","razorpay_payment_id":"pay_test_1776139551812","service":"battlenix-api","timestamp":"2026-04-14 09:35:52"}
+{"level":"error","message":"Failed to fetch payment status from Razorpay during verify","paymentId":"69ddbd43c63afaf8d695c1f1","razorpay_order_id":"order_SdEch51d5hHGUe","razorpay_payment_id":"pay_test_1776139591112","service":"battlenix-api","timestamp":"2026-04-14 09:36:31"}
+{"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","matchId":"69d228a70c7ab601495e0b7b","message":"setMatchStatus error","service":"battlenix-api","timestamp":"2026-04-14 09:48:48"}
+{"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","matchId":"69d228a70c7ab601495e0b7b","message":"setMatchStatus error","service":"battlenix-api","timestamp":"2026-04-14 09:48:58"}
+{"level":"error","message":"Failed to fetch payment status from Razorpay during verify","paymentId":"69ddc35297f329814554cb05","razorpay_order_id":"order_SdF43hJq1RWh2r","razorpay_payment_id":"pay_test_1776141147843","service":"battlenix-api","timestamp":"2026-04-14 10:02:29"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-14 12:47:15"}
+{"level":"error","message":"Failed to fetch payment status from Razorpay during verify","paymentId":"69ddedc5f185c6d0d4ff50c5","razorpay_order_id":"order_SdI9KMYmN6N6Ov","razorpay_payment_id":"pay_test_1776152021897","service":"battlenix-api","timestamp":"2026-04-14 13:03:43"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-14 16:02:15"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-14 16:02:15"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-14 16:03:07"}
+{"error":"Cannot read properties of null (reading 'toString')","level":"error","message":"getMatchChats error","service":"battlenix-api","timestamp":"2026-04-14 16:03:08"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-15 16:20:44"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-15 16:20:49"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 19:45:10"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 19:45:11"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 19:45:11"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 19:45:11"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 22:09:00"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 22:09:08"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 22:09:17"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-16 22:10:00"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:09:47"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:09:52"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:09:57"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:09:58"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:09:58"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:09:59"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:09:59"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:10:01"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:10:03"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:42"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:42"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:42"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:42"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:42"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:43"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:44"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:45"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:48"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:19:50"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-18 22:29:05"}
+{"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","matchId":"69d228a70c7ab601495e0b7b","message":"setMatchStatus error","service":"battlenix-api","timestamp":"2026-04-18 22:41:36"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 10:23:17"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 10:34:59"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:03:31"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:07"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:07"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:07"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:07"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:07"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:08"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:09"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:10"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:12"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:15"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:17"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:19"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:21"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:23"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:25"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:27"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:29"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:31"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:33"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:35"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:38"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:40"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:42"}
+{"error":"getaddrinfo ENOTFOUND ac-x8primc-shard-00-01.l0ra8vv.mongodb.net","level":"error","message":"Match lifecycle sweep failed","service":"battlenix-api","timestamp":"2026-04-19 11:04:45"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:45"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:51"}
+{"error":"getaddrinfo ENOTFOUND shining-cardinal-92540.upstash.io","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 11:04:53"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 12:13:53"}
+{"error":"Match validation failed: maxPlayers: Path `maxPlayers` (1) is less than minimum allowed value (2).","level":"error","message":"toggleChat error","service":"battlenix-api","timestamp":"2026-04-19 12:24:08"}
+{"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","message":"toggleChat error","service":"battlenix-api","timestamp":"2026-04-19 12:25:04"}
+{"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","matchId":"69d228a70c7ab601495e0b7b","message":"setMatchStatus error","service":"battlenix-api","timestamp":"2026-04-19 12:27:58"}
+{"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 13:25:00"}
+{"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 14:12:11"}

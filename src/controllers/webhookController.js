@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const Payment = require('../models/Payment');
-const { settleCapturedPayment, validateCapturedPaymentRecord, processRefund } = require('./paymentController');
+const {
+  settleCapturedPayment,
+  settleStandalonePayment,
+  validateCapturedPaymentRecord,
+  processRefund,
+} = require('./paymentController');
 const logger = require('../utils/logger');
 
 const handleWebhook = async (req, res) => {
@@ -46,6 +51,7 @@ const handleWebhook = async (req, res) => {
         razorpayOrderId: orderId,
         razorpayPaymentId: paymentId,
         amount: paymentEntity.amount,
+        currency: paymentEntity.currency,
         status: paymentEntity.status,
       });
 
@@ -58,7 +64,10 @@ const handleWebhook = async (req, res) => {
           message: validation.message,
         });
 
-        if (validation.code === 'AMOUNT_MISMATCH') {
+        if (
+          validation.code === 'AMOUNT_MISMATCH' ||
+          validation.code === 'CURRENCY_MISMATCH'
+        ) {
           await Payment.findByIdAndUpdate(payment._id, {
             $set: {
               status: 'FAILED',
@@ -66,10 +75,45 @@ const handleWebhook = async (req, res) => {
               razorpay_payment_id: paymentId,
             },
           });
-          await processRefund(payment._id, validation.message);
+          await processRefund(payment._id, validation.message, {
+            razorpayPaymentId: paymentId,
+          });
+        }
+
+        if (validation.code === 'PAYMENT_ID_CONFLICT') {
+          await processRefund(payment._id, validation.message, {
+            razorpayPaymentId: paymentId,
+          });
         }
 
         return res.status(200).json({ message: validation.message });
+      }
+
+      if (!payment.matchId) {
+        if (payment.status === 'SUCCESS') {
+          return res.status(200).json({ message: 'Already processed' });
+        }
+
+        if (payment.status === 'FAILED') {
+          return res.status(200).json({ message: 'Payment already failed' });
+        }
+
+        const settlement = await settleStandalonePayment({
+          paymentId: payment._id,
+          razorpayPaymentId: paymentId,
+          source: 'Webhook',
+        });
+
+        logger.info('Webhook prepaid payment.captured processed', {
+          orderId,
+          paymentId,
+          paymentRecordId: payment._id,
+          outcome: settlement.kind,
+        });
+
+        return res.status(200).json({
+          message: settlement.kind === 'SUCCESS' ? 'Webhook processed' : 'Already processed',
+        });
       }
 
       const settlement = await settleCapturedPayment({
@@ -105,7 +149,10 @@ const handleWebhook = async (req, res) => {
       }
 
       if (settlement.kind === 'PAYMENT_ID_CONFLICT') {
-        return res.status(200).json({ message: 'Payment id conflict detected' });
+        return res.status(200).json({
+          message: 'Payment id conflict detected',
+          refund_status: settlement.payment.refundStatus,
+        });
       }
 
       return res.status(200).json({ message: 'Payment processing is already in progress' });
@@ -140,19 +187,39 @@ const handleWebhook = async (req, res) => {
           paymentId,
           paymentRecordId: payment._id,
         });
+
+        if (payment.razorpay_payment_id) {
+          await processRefund(payment._id, 'Payment failed webhook', {
+            razorpayPaymentId: payment.razorpay_payment_id,
+          });
+        }
+
         return res.status(200).json({ message: 'Payment already failed' });
       }
 
-      payment.status = 'FAILED';
-      payment.razorpay_payment_id = paymentId;
-      payment.processingAt = null;
-      await payment.save();
+      const failedPayment = await Payment.findByIdAndUpdate(
+        payment._id,
+        {
+          $set: {
+            status: 'FAILED',
+            razorpay_payment_id: payment.razorpay_payment_id,
+            processingAt: null,
+          },
+        },
+        { new: true }
+      );
 
       logger.info('Webhook marked payment as FAILED', {
         orderId,
         paymentId,
-        paymentRecordId: payment._id,
+        paymentRecordId: failedPayment._id,
       });
+
+      if (failedPayment.razorpay_payment_id) {
+        await processRefund(failedPayment._id, 'Payment failed webhook', {
+          razorpayPaymentId: failedPayment.razorpay_payment_id,
+        });
+      }
 
       return res.status(200).json({ message: 'Payment marked as failed' });
     }

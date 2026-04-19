@@ -10,12 +10,13 @@ const paymentSchema = new mongoose.Schema(
     matchId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Match',
-      required: true,
+      default: null,
     },
     razorpay_order_id: {
       type: String,
       required: true,
       unique: true,
+      index: true,
     },
     razorpay_payment_id: {
       type: String,
@@ -28,6 +29,13 @@ const paymentSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true, // stored in rupees (e.g. 50 = Rs 50)
+    },
+    currency: {
+      type: String,
+      required: true,
+      default: 'INR',
+      trim: true,
+      uppercase: true,
     },
     status: {
       type: String,
@@ -43,6 +51,10 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    refundPaymentId: {
+      type: String,
+      default: null,
+    },
     refundStatus: {
       type: String,
       enum: ['PENDING', 'PROCESSED', 'FAILED', null],
@@ -51,6 +63,15 @@ const paymentSchema = new mongoose.Schema(
     refundAmount: {
       type: Number,
       default: null, // stored in rupees
+    },
+    refundRetryCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    refundLastAttemptAt: {
+      type: Date,
+      default: null,
     },
     refundReason: {
       type: String,
