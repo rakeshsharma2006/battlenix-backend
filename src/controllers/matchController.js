@@ -257,13 +257,21 @@ const createMatch = async (req, res) => {
 
 const listMatches = async (req, res) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
+
     const matches = await Match.find(buildMatchFilter(req.query))
       .populate(MATCH_POPULATE)
       .sort({ startTime: 1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
 
     return res.status(200).json({
       matches: matches.map((match) => serializeMatch(match)),
+      page,
+      limit,
     });
   } catch (error) {
     logger.error('listMatches error', { error: error.message });
@@ -537,22 +545,30 @@ const deleteMatch = async (req, res) => {
 
     const Chat = require('../models/Chat');
     const Payment = require('../models/Payment');
-    
-    await Promise.all([
-      Chat.deleteMany({ matchId: req.params.id }),
-      Payment.updateMany(
-        { matchId: req.params.id },
-        { $set: { archived: true } }
-      ),
-    ]);
-    
-    await Match.findByIdAndDelete(req.params.id);
-    
+
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await Chat.deleteMany({ matchId: req.params.id }, { session });
+        await Payment.updateMany(
+          { matchId: req.params.id },
+          { $set: { archived: true } },
+          { session }
+        );
+        const deleted = await Match.findByIdAndDelete(req.params.id, { session });
+        if (!deleted) {
+          throw Object.assign(new Error('Match not found'), { statusCode: 404 });
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
+
     logger.info('Match deleted', {
       matchId: req.params.id,
       deletedBy: req.user._id,
     });
-    
+
     return res.status(200).json({
       message: 'Match deleted successfully',
     });
@@ -562,7 +578,7 @@ const deleteMatch = async (req, res) => {
     }
 
     logger.error('deleteMatch error', { error: error.message });
-    return res.status(500).json({ message: 'Failed to cancel match', error: error.message });
+    return res.status(500).json({ message: 'Failed to delete match', error: error.message });
   }
 };
 

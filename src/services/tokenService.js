@@ -8,6 +8,7 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || `${ACCESS_TOKEN
 const ACCESS_TOKEN_EXPIRES_IN = '15m';
 const REFRESH_TOKEN_EXPIRES_IN = '7d';
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days absolute cap
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
@@ -34,19 +35,23 @@ const signRefreshToken = ({ userId, tokenId }) => jwt.sign(
   { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
 );
 
-const persistRefreshToken = async ({ userId, refreshToken, tokenId }) => RefreshToken.create({
+const persistRefreshToken = async ({ userId, refreshToken, tokenId, familyExpiresAt, session }) => RefreshToken.create([{
   userId,
   tokenId,
   tokenHash: hashToken(refreshToken),
-  expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-});
+  expiresAt: new Date(Math.min(Date.now() + REFRESH_TOKEN_TTL_MS, familyExpiresAt.getTime())),
+  familyExpiresAt,
+}], { session });
 
 const issueAuthTokens = async (user) => {
   const tokenId = crypto.randomUUID();
   const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken({ userId: user._id, tokenId });
+  
+  // A completely new login gets a fresh 30-day absolute cap
+  const familyExpiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
 
-  await persistRefreshToken({ userId: user._id, refreshToken, tokenId });
+  await persistRefreshToken({ userId: user._id, refreshToken, tokenId, familyExpiresAt });
 
   return {
     accessToken,
@@ -104,15 +109,19 @@ const rotateRefreshToken = async (refreshToken) => {
         throw new Error('Refresh token is invalid or expired');
       }
 
-      nextRefreshToken = signRefreshToken({ userId: decoded.sub, tokenId: nextTokenId });
-      const nextTokenHash = hashToken(nextRefreshToken);
+      if (claimedToken.familyExpiresAt < new Date()) {
+        throw new Error('Absolute session limit reached, please log in again');
+      }
 
-      await RefreshToken.create([{
+      nextRefreshToken = signRefreshToken({ userId: decoded.sub, tokenId: nextTokenId });
+
+      await persistRefreshToken({
         userId: claimedToken.userId,
+        refreshToken: nextRefreshToken,
         tokenId: nextTokenId,
-        tokenHash: nextTokenHash,
-        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-      }], { session });
+        familyExpiresAt: claimedToken.familyExpiresAt,
+        session,
+      });
     });
   } finally {
     await session.endSession();

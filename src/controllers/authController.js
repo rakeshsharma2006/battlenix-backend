@@ -52,9 +52,34 @@ const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    if (user.isLocked) {
+      const waitMinutes = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      return res.status(401).json({ 
+        message: `Account is temporarily locked. Try again in ${waitMinutes} minutes.` 
+      });
+    }
+
     const isMatch = await user.comparePassword(password);
+    
     if (!isMatch) {
+      user.loginAttempts += 1;
+      if (user.loginAttempts >= 4) {
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lock
+        // Send a specific message on the threshold breach to inform the user
+        await user.save();
+        return res.status(401).json({ 
+          message: 'Too many failed attempts. Account locked for 15 minutes.' 
+        });
+      }
+      await user.save();
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // Success, reset tracking
+    if (user.loginAttempts > 0 || user.lockUntil != null) {
+      user.loginAttempts = 0;
+      user.lockUntil = null;
+      await user.save();
     }
 
     return res.status(200).json(

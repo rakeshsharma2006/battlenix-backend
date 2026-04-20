@@ -31,7 +31,7 @@ const getRazorpayClient = () => {
 
 const PROCESSING_LOCK_TTL_MS = 2 * 60 * 1000;
 const ORDER_RESERVATION_PREFIX = 'pending_';
-const ORDER_RESERVATION_TTL_MS = 60 * 1000;
+const ORDER_RESERVATION_TTL_MS = 10 * 60 * 1000; // 10 minutes — covers Razorpay modal + cancel delay
 const MAX_REFUND_RETRY_ATTEMPTS = 3;
 const REFUND_RETRY_DELAY_MS = 1000;
 const VALID_ENTRY_FEES = [20, 30, 50, 100];
@@ -884,12 +884,15 @@ const createOrder = async (req, res) => {
         });
       }
 
-      const existingPayment = await Payment.findOne({
+      // ✅ FIX Bug 1: Only block on SUCCESS — a PENDING record alone does NOT mean
+      // the user has paid.  PENDING records are left behind when the user cancels
+      // the Razorpay modal; they are cleaned up below.
+      const successPayment = await Payment.findOne({
         userId: req.user._id,
         matchId,
-        status: { $in: ['SUCCESS', 'PENDING'] },
+        status: 'SUCCESS',
       });
-      if (existingPayment) {
+      if (successPayment) {
         return res.status(400).json({
           message: 'You have already paid for this match.',
         });
@@ -912,10 +915,11 @@ const createOrder = async (req, res) => {
       userId,
       matchId: paymentMatchId,
       status: 'PENDING',
-    }).select('razorpay_order_id amount createdAt');
+    }).select('razorpay_order_id amount createdAt processingAt');
 
     if (existingPending) {
       if (isTemporaryOrderId(existingPending.razorpay_order_id)) {
+        // Temporary reservation (order not yet created in Razorpay)
         const releasedReservation = await claimStaleReservationFailure(
           existingPending._id,
           existingPending.razorpay_order_id
@@ -940,20 +944,60 @@ const createOrder = async (req, res) => {
           paymentId: releasedReservation._id,
           staleOrderId: releasedReservation.razorpay_order_id,
         });
-      } else {
-        logger.info('Pending order reservation already exists', {
-          userId,
-          matchId: paymentMatchId,
-          paymentId: existingPending._id,
-        });
+        // Fall through — create a fresh order below
 
-        return res.status(200).json({
-          message: 'Existing pending order found',
-          order_id: existingPending.razorpay_order_id,
-          amount: existingPending.amount * 100,
-          currency: 'INR',
-          payment_id: existingPending._id,
-        });
+      } else {
+        // Real Razorpay order ID already assigned
+        const isStale =
+          isProcessingLockExpired(existingPending.processingAt) ||
+          new Date(existingPending.createdAt).getTime() < getStaleReservationCutoff().getTime();
+
+        if (isStale) {
+          // ✅ FIX Bug 1: User cancelled the Razorpay modal (or force-closed the app).
+          // The PENDING record was never verified/failed.  Mark it FAILED so the
+          // user can create a fresh order.
+          const released = await Payment.findOneAndUpdate(
+            {
+              _id: existingPending._id,
+              status: 'PENDING',
+              razorpay_order_id: existingPending.razorpay_order_id,
+            },
+            { $set: { status: 'FAILED', processingAt: null } },
+            { new: true }
+          );
+
+          if (released) {
+            logger.warn('Released stale real-order PENDING payment before retrying', {
+              userId,
+              matchId: paymentMatchId,
+              paymentId: released._id,
+              staleOrderId: released.razorpay_order_id,
+            });
+            // Fall through — create a fresh order below
+          } else {
+            // Another concurrent request already claimed it
+            return res.status(202).json({
+              message: 'Order creation already in progress. Retry shortly.',
+              payment_id: existingPending._id,
+            });
+          }
+        } else {
+          // Fresh, non-stale real order — return it for reuse (user re-opened the
+          // app within the TTL window without completing payment)
+          logger.info('Returning existing non-stale pending order', {
+            userId,
+            matchId: paymentMatchId,
+            paymentId: existingPending._id,
+          });
+
+          return res.status(200).json({
+            message: 'Existing pending order found',
+            order_id: existingPending.razorpay_order_id,
+            amount: existingPending.amount * 100,
+            currency: 'INR',
+            payment_id: existingPending._id,
+          });
+        }
       }
     }
 
@@ -1392,9 +1436,59 @@ const verifyPayment = async (req, res) => {
   }
 };
 
+// ── Cancel Order ─────────────────────────────────────────────────────────────
+// Lightweight endpoint called fire-and-forget when the user cancels the
+// Razorpay modal.  Flips PENDING → FAILED so the next create-order call
+// doesn't hit the stale-record guard.  Only touches records where no active
+// processing lock is held (i.e. verifyPayment hasn't already claimed it).
+const cancelOrder = async (req, res) => {
+  try {
+    const { matchId } = req.body;
+    const userId = req.user._id;
+
+    const released = await Payment.findOneAndUpdate(
+      {
+        userId,
+        matchId: matchId || null,
+        status: 'PENDING',
+        // Never cancel if verifyPayment or webhook has already taken the lock.
+        $or: [
+          { processingAt: { $exists: false } },
+          { processingAt: null },
+          { processingAt: { $lt: getStaleLockCutoff() } },
+        ],
+      },
+      { $set: { status: 'FAILED', processingAt: null } },
+      { new: true }
+    );
+
+    if (released) {
+      logger.info('User cancelled pending payment order', {
+        userId,
+        matchId: matchId || null,
+        paymentId: released._id,
+        orderId: released.razorpay_order_id,
+      });
+    } else {
+      logger.info('cancelOrder: no stale PENDING record found (already processing or none exists)', {
+        userId,
+        matchId: matchId || null,
+      });
+    }
+
+    // Always 200 — this is fire-and-forget from the client.
+    return res.status(200).json({ message: 'OK' });
+  } catch (error) {
+    logger.error('cancelOrder error', { error: error.message });
+    // Never surface an error to the client for this fire-and-forget call.
+    return res.status(200).json({ message: 'OK' });
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
+  cancelOrder,
   atomicJoin,
   hasUserJoinedMatch,
   diagnoseJoinFailure,

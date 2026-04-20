@@ -97,4 +97,18 @@ paymentSchema.index({ status: 1, createdAt: -1 });
 paymentSchema.index({ refundStatus: 1, refundCreatedAt: -1 });
 paymentSchema.index({ processingAt: 1, status: 1 });
 
+// Safety-net TTL: MongoDB automatically removes PENDING payment documents
+// that are older than 20 minutes. This handles the case where the client
+// crashed or lost connectivity before cancel-order could fire, preventing
+// users from being permanently blocked from re-joining.
+paymentSchema.index(
+  { createdAt: 1 },
+  {
+    expireAfterSeconds: 1200, // 20 minutes
+    partialFilterExpression: { status: 'PENDING' },
+    name: 'pending_payment_ttl',
+  }
+);
+
 module.exports = mongoose.model('Payment', paymentSchema);
+

@@ -107,4 +107,30 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   }
 });
 
+// ─── Logout — revoke server-side refresh token ────────────────────────────
+// Best-effort: even if the DB update fails, the client clears its tokens.
+// An attacker who extracted the refresh token before logout won't be able to
+// use it after this call sets revokedAt.
+
+router.post('/logout', authMiddleware, async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (refreshToken && typeof refreshToken === 'string') {
+      const RefreshToken = require('../models/RefreshToken');
+      const tokenHash = hashToken(refreshToken);
+      await RefreshToken.updateOne(
+        { tokenHash, revokedAt: null },
+        { $set: { revokedAt: new Date() } }
+      );
+    }
+  } catch (err) {
+    // Non-fatal — log but still confirm logout to the client
+    logger.warn('Logout: failed to revoke refresh token in DB', { error: err.message });
+  }
+
+  return res.status(200).json({ message: 'Logged out successfully' });
+});
+
 module.exports = router;
+

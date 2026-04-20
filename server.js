@@ -10,6 +10,17 @@ const { initializeSocket } = require('./src/services/socketService');
 
 const PORT = process.env.PORT || 5000;
 
+// ─── Process-level error handling ──────────────────────────────────────────
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', { reason: String(reason) });
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception', { error: err.message, stack: err.stack });
+  process.exit(1);
+});
+
 connectDB()
   .then(() => {
     const httpServer = http.createServer(app);

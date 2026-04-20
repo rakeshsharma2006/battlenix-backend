@@ -35,14 +35,14 @@ const authSchemas = {
     username: z.string().trim().min(3).max(30),
     email: z.string().trim().email(),
     password: z.string().min(6).max(128),
-  }),
+  }).strict(),
   loginBody: z.object({
     email: z.string().trim().email(),
     password: z.string().min(6).max(128),
-  }),
+  }).strict(),
   refreshBody: z.object({
     refreshToken: z.string().trim().min(1),
-  }),
+  }).strict(),
 };
 
 const paymentSchemas = {
@@ -242,7 +242,7 @@ const playerSchemas = {
     gameUID: z.string().trim().max(50).optional(),
     gameName: z.string().trim().max(50).optional(),
     upiId: z.string().trim().min(5).max(100).optional(),
-  }),
+  }).strict(),
   playerIdParams: z.object({
     userId: objectIdSchema,
   }),
@@ -259,7 +259,7 @@ const withdrawSchemas = {
   requestBody: z.object({
     amount: z.coerce.number().min(50, 'Minimum withdrawal is Rs 50'),
     upiId: z.string().trim().min(5).max(100),
-  }),
+  }).strict(),
   listQuery: z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(20),

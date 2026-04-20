@@ -4,20 +4,36 @@ const helmet = require('helmet');
 const routes = require('./src/routes');
 const passport = require('./src/config/passport');
 const { globalLimiter } = require('./src/middlewares/rateLimiters');
+const logger = require('./src/utils/logger');
 
 const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
-app.use(cors({
-  origin: [
+
+// ─── CORS ──────────────────────────────────────────────────────────────────
+// Production: only the explicit FRONTEND_ORIGIN env var is allowed.
+// Development: common LAN and localhost ranges are allowed.
+let allowedOrigins;
+if (process.env.NODE_ENV === 'production') {
+  const prodOrigin = process.env.FRONTEND_ORIGIN;
+  if (!prodOrigin) {
+    logger.warn(
+      '[CORS] FRONTEND_ORIGIN is not set in production — all origins will be BLOCKED. ' +
+      'Set FRONTEND_ORIGIN=https://yourdomain.com in your environment.'
+    );
+  }
+  allowedOrigins = prodOrigin ? [prodOrigin] : [];
+} else {
+  allowedOrigins = [
     /^http:\/\/localhost:\d+$/,
     /^http:\/\/127\.0\.0\.1:\d+$/,
     /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
     /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/,
-  ],
-  credentials: true,
-}));
+  ];
+}
+
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 app.use('/payment/webhook', express.json({
   verify: (req, res, buf) => {

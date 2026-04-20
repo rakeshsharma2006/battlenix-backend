@@ -30,6 +30,10 @@ const refreshTokenSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    familyExpiresAt: {
+      type: Date,
+      required: true,
+    },
   },
   { timestamps: true }
 );
