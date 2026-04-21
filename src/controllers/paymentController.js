@@ -1178,10 +1178,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    const skipVerificationForTestPayment = (
-      process.env.NODE_ENV !== 'production' ||
-      (typeof razorpay_payment_id === 'string' && razorpay_payment_id.startsWith('pay_test_'))
-    );
+    const skipVerificationForTestPayment = process.env.NODE_ENV !== 'production';
 
     if (skipVerificationForTestPayment) {
       logger.warn('Skipping Razorpay verification for test/development payment', {
@@ -1251,7 +1248,7 @@ const verifyPayment = async (req, res) => {
           });
         }
 
-        return res.status(validation.code === 'PAYMENT_ID_CONFLICT' ? 409 : 400).json({
+        return res.status(400).json({
           message: validation.message,
         });
       }

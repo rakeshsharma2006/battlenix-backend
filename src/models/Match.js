@@ -215,7 +215,6 @@ matchSchema.index({ game: 1, map: 1, mode: 1, entryFee: 1, status: 1, slotType: 
 matchSchema.index({ slotCode: 1 }, { unique: true, sparse: true });
 
 // OPTIMIZATION 2: Additional indexes for common query patterns
-matchSchema.index({ status: 1 });                // fast status-only filter
 matchSchema.index({ status: 1, game: 1 });        // game lobby listing
 matchSchema.index({ players: 1, status: 1 });    // "is user in active match?" check — covers hasUserJoinedMatch + findActiveMatchForUser
 matchSchema.index({ entryFee: 1, status: 1 });   // free-match listing filter

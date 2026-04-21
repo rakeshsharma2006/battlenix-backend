@@ -8,6 +8,14 @@ const { globalLimiter } = require('./src/middlewares/rateLimiters');
 const logger = require('./src/utils/logger');
 
 const app = express();
+const REQUEST_TIMEOUT_MS = 30000;
+const haltOnTimedout = (req, res, next) => {
+  if (req.timedout) {
+    return;
+  }
+
+  next();
+};
 
 app.set('trust proxy', 1);
 app.use(helmet());
@@ -36,12 +44,40 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use((req, res, next) => {
+  req.timedout = false;
+  req.timeoutController = new AbortController();
+  req.timeoutSignal = req.timeoutController.signal;
+  req.setTimeout(REQUEST_TIMEOUT_MS);
+
+  const timeoutId = setTimeout(() => {
+    req.timedout = true;
+    req.timeoutController.abort(new Error('Request timeout'));
+
+    logger.warn('Request deadline exceeded', {
+      path: req.path,
+      method: req.method,
+    });
+
+    if (!res.headersSent) {
+      res.status(408).json({ message: 'Request timeout' });
+    }
+  }, REQUEST_TIMEOUT_MS);
+
+  const clearDeadline = () => clearTimeout(timeoutId);
+  res.on('finish', clearDeadline);
+  res.on('close', clearDeadline);
+
+  next();
+});
+app.use(haltOnTimedout);
 
 app.use('/payment/webhook', express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   },
 }));
+app.use(haltOnTimedout);
 
 app.use((req, res, next) => {
   if (req.path.startsWith('/support')) {
@@ -51,37 +87,34 @@ app.use((req, res, next) => {
   // Webhook stays on raw body (handled above).
   express.json({ limit: '10kb' })(req, res, next);
 });
+app.use(haltOnTimedout);
 app.use((req, res, next) => {
   if (req.path.startsWith('/support')) {
     return next();
   }
   express.urlencoded({ extended: true, limit: '10kb' })(req, res, next);
 });
+app.use(haltOnTimedout);
 app.use(passport.initialize());
+app.use(haltOnTimedout);
 app.use(globalLimiter);
-app.use((req, res, next) => {
-  res.setTimeout(30000, () => {
-    logger.warn('Request timeout', {
-      path: req.path,
-      method: req.method,
-    });
+app.use(haltOnTimedout);
 
-    if (!res.headersSent) {
-      res.status(408).json({ message: 'Request timeout' });
-    }
-  });
-
-  next();
-});
-
-app.use('/', routes);
+app.use('/', haltOnTimedout, routes);
 
 app.use((req, res, next) => {
+  if (req.timedout) {
+    return;
+  }
+
   res.status(404).json({ message: 'Route not found' });
 });
 
 app.use((err, req, res, next) => {
-  const logger = require('./src/utils/logger');
+  if (req.timedout) {
+    return;
+  }
+
   logger.error('Unhandled error', {
     message: err.message,
     stack: err.stack,

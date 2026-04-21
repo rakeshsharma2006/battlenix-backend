@@ -230,6 +230,14 @@ const cleanupCancelledPending = async () => {
         }
       }
     } catch (error) {
+      logger.warn('Payment cleanup: Razorpay order fetch failed, falling back to stale-age handling', {
+        paymentId: payment._id,
+        orderId: payment.razorpay_order_id,
+        ageMinutes,
+        clearedCount,
+        error: error.message,
+      });
+
       if (ageMinutes > 30) {
         const released = await Payment.findOneAndUpdate(
           {
