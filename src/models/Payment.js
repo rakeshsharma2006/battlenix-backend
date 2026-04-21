@@ -97,6 +97,19 @@ paymentSchema.index({ status: 1, createdAt: -1 });
 paymentSchema.index({ refundStatus: 1, refundCreatedAt: -1 });
 paymentSchema.index({ processingAt: 1, status: 1 });
 
+// OPTIMIZATION 2: Compound index — covers getMatch isJoined + createOrder SUCCESS check
+paymentSchema.index({ userId: 1, matchId: 1, status: 1 });
+
+// OPTIMIZATION 2: TTL safety-net for FAILED records (cleanup after 24 h)
+paymentSchema.index(
+  { createdAt: 1 },
+  {
+    expireAfterSeconds: 86400, // 24 hours
+    partialFilterExpression: { status: 'FAILED' },
+    name: 'failed_payment_ttl',
+  }
+);
+
 // Safety-net TTL: MongoDB automatically removes PENDING payment documents
 // that are older than 20 minutes. This handles the case where the client
 // crashed or lost connectivity before cancel-order could fire, preventing

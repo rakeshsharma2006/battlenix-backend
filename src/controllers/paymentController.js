@@ -866,6 +866,14 @@ const createOrder = async (req, res) => {
         return res.status(404).json({ message: 'Match not found' });
       }
 
+      // ✅ BUG 1 FIX: Block free matches from entering the Razorpay flow entirely.
+      if (match.entryFee === 0) {
+        return res.status(400).json({
+          message: 'Free match. Use the /match/:matchId/join-free endpoint.',
+          code: 'FREE_MATCH_USE_JOIN_FREE',
+        });
+      }
+
       if (match.status !== 'UPCOMING') {
         return res.status(400).json({ message: getJoinRestrictionMessage(match.status) });
       }

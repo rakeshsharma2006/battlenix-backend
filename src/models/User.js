@@ -135,4 +135,10 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
+// OPTIMIZATION 2: Explicit named indexes so they appear in explain() plans.
+// Note: Mongoose also builds these from `unique: true` in the schema definition
+// above — these calls simply assign a name and ensure they won't be skipped.
+userSchema.index({ email: 1 }, { unique: true, name: 'email_unique' });
+userSchema.index({ username: 1 }, { unique: true, name: 'username_unique' });
+
 module.exports = mongoose.model('User', userSchema);

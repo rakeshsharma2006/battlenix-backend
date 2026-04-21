@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Match = require('../models/Match');
+const Payment = require('../models/Payment');
 const logger = require('../utils/logger');
 const { emitToUser } = require('../services/socketService');
 const { cancelMatchAndRefund } = require('../services/matchCancellationService');
@@ -268,8 +269,32 @@ const listMatches = async (req, res) => {
       .limit(limit)
       .lean();
 
+    // BUG 2 FIX: attach isJoined per-match for authenticated users.
+    // Uses a single $in aggregation — no N+1 loop.
+    let joinedMatchIds = new Set();
+    if (req.user?._id) {
+      const successPayments = await Payment.find({
+        userId: req.user._id,
+        matchId: { $in: matches.map((m) => m._id) },
+        status: 'SUCCESS',
+      }).select('matchId').lean();
+
+      // Also check free matches (player in players array)
+      const freeJoins = await Match.find({
+        _id: { $in: matches.map((m) => m._id) },
+        players: req.user._id,
+        entryFee: 0,
+      }).select('_id').lean();
+
+      successPayments.forEach((p) => joinedMatchIds.add(String(p.matchId)));
+      freeJoins.forEach((m) => joinedMatchIds.add(String(m._id)));
+    }
+
     return res.status(200).json({
-      matches: matches.map((match) => serializeMatch(match)),
+      matches: matches.map((match) => ({
+        ...serializeMatch(match),
+        isJoined: joinedMatchIds.has(String(match._id)),
+      })),
       page,
       limit,
     });
@@ -286,7 +311,25 @@ const getMatch = async (req, res) => {
       return res.status(404).json({ message: 'Match not found' });
     }
 
-    return res.status(200).json({ match: serializeMatch(match) });
+    // BUG 2 FIX: include isJoined so client can show "Enter Lobby" on reload.
+    let isJoined = false;
+    if (req.user?._id) {
+      if (match.entryFee === 0) {
+        // Free match — check player array directly
+        isJoined = match.players.some(
+          (p) => String(p._id || p) === String(req.user._id)
+        );
+      } else {
+        const successPayment = await Payment.findOne({
+          userId: req.user._id,
+          matchId: match._id,
+          status: 'SUCCESS',
+        }).select('_id').lean();
+        isJoined = Boolean(successPayment);
+      }
+    }
+
+    return res.status(200).json({ match: { ...serializeMatch(match), isJoined } });
   } catch (error) {
     logger.error('getMatch error', { error: error.message });
     return res.status(500).json({ message: 'Failed to fetch match', error: error.message });
@@ -730,6 +773,127 @@ const toggleChat = async (req, res) => {
   }
 };
 
+// Local helper – mirrors the same fn in paymentController.
+// Must be declared before joinFreeMatch (const is not hoisted).
+const getJoinRestrictionMessage = (status) => {
+  const messages = {
+    READY: 'Match is full and waiting to go live',
+    LIVE: 'Match is already live',
+    COMPLETED: 'Match is already completed',
+    CANCELLED: 'Match has been cancelled',
+  };
+  return messages[status] || 'Match is not open for joining';
+};
+
+// ─── BUG 1 FIX: Free Match Join ─────────────────────────────────────────────
+// POST /match/:id/join-free
+// Lets a user join a free (entryFee === 0) match without any payment flow.
+const joinFreeMatch = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id)
+      .select('entryFee status playersCount maxPlayers mode players');
+
+    if (!match) {
+      return res.status(404).json({ message: 'Match not found' });
+    }
+
+    // Guard: only free matches may use this endpoint
+    if (match.entryFee !== 0) {
+      return res.status(400).json({
+        message: 'This match requires payment. Use the payment flow.',
+      });
+    }
+
+    if (!['UPCOMING'].includes(match.status)) {
+      // Already joined — idempotent success
+      const alreadyIn = match.players.some(
+        (p) => String(p._id || p) === String(req.user._id)
+      );
+      if (alreadyIn) {
+        return res.status(200).json({ joined: true, matchStatus: match.status });
+      }
+      return res.status(400).json({ message: getJoinRestrictionMessage(match.status) });
+    }
+
+    // Idempotent: already in the players array
+    const alreadyJoined = match.players.some(
+      (p) => String(p._id || p) === String(req.user._id)
+    );
+    if (alreadyJoined) {
+      return res.status(200).json({ joined: true, matchStatus: match.status });
+    }
+
+    if (match.playersCount >= match.maxPlayers) {
+      return res.status(400).json({ message: 'Match is full' });
+    }
+
+    // Re-use the battle-tested atomicJoin that already lives in paymentController.
+    // We call the Match model directly here with the same atomic pipeline.
+    const teamSize = TEAM_SIZE_BY_MODE[match.mode] || 1;
+    const nextPlayersCount = { $add: ['$playersCount', 1] };
+
+    const updatedMatch = await Match.findOneAndUpdate(
+      {
+        _id: match._id,
+        status: 'UPCOMING',
+        playersCount: { $lt: match.maxPlayers },
+        players: { $ne: req.user._id },
+      },
+      [
+        {
+          $set: {
+            players: {
+              $concatArrays: [{ $ifNull: ['$players', []] }, [req.user._id]],
+            },
+            playerAssignments: {
+              $concatArrays: [
+                { $ifNull: ['$playerAssignments', []] },
+                [{
+                  userId: req.user._id,
+                  teamId: { $add: [{ $floor: { $divide: ['$playersCount', teamSize] } }, 1] },
+                  slot:   { $add: [{ $mod:   ['$playersCount', teamSize] }, 1] },
+                }],
+              ],
+            },
+            playersCount: nextPlayersCount,
+            status: {
+              $cond: [{ $eq: [nextPlayersCount, match.maxPlayers] }, 'READY', 'UPCOMING'],
+            },
+          },
+        },
+      ],
+      { new: true }
+    );
+
+    if (!updatedMatch) {
+      // Race condition: someone else filled the spot in the same instant
+      const refreshed = await Match.findById(match._id).select('status players');
+      const nowIn = refreshed?.players.some((p) => String(p._id || p) === String(req.user._id));
+      if (nowIn) {
+        return res.status(200).json({ joined: true, matchStatus: refreshed.status });
+      }
+      return res.status(400).json({ message: refreshed ? getJoinRestrictionMessage(refreshed.status) : 'Match not found' });
+    }
+
+    logger.info('Free match joined', {
+      matchId: updatedMatch._id,
+      userId: req.user._id,
+      playersCount: updatedMatch.playersCount,
+      matchStatus: updatedMatch.status,
+    });
+
+    emitMatchChange(updatedMatch, match.status);
+
+    return res.status(200).json({
+      joined: true,
+      matchStatus: updatedMatch.status,
+    });
+  } catch (error) {
+    logger.error('joinFreeMatch error', { error: error.message, matchId: req.params.id, userId: req.user?._id });
+    return res.status(500).json({ message: 'Failed to join free match', error: error.message });
+  }
+};
+
 module.exports = {
   createMatch,
   listMatches,
@@ -742,4 +906,5 @@ module.exports = {
   publishRoom,
   submitResult,
   toggleChat,
+  joinFreeMatch,
 };

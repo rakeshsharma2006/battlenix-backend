@@ -45,13 +45,15 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/support')) {
     return next();
   }
-  express.json({ limit: '100kb' })(req, res, next);
+  // OPTIMIZATION 2: Tightened from 100kb — 10kb is ample for all API payloads.
+  // Webhook stays on raw body (handled above).
+  express.json({ limit: '10kb' })(req, res, next);
 });
 app.use((req, res, next) => {
   if (req.path.startsWith('/support')) {
     return next();
   }
-  express.urlencoded({ extended: true, limit: '100kb' })(req, res, next);
+  express.urlencoded({ extended: true, limit: '10kb' })(req, res, next);
 });
 app.use(passport.initialize());
 app.use(globalLimiter);
@@ -64,7 +66,20 @@ app.use((req, res, next) => {
 
 app.use((err, req, res, next) => {
   const logger = require('./src/utils/logger');
-  logger.error('Unhandled error', { error: err.message, stack: err.stack });
+  logger.error('Unhandled error', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+  });
+
+  // OPTIMIZATION 2: Surface Razorpay misconfiguration as 503
+  if (err.code === 'RAZORPAY_NOT_CONFIGURED') {
+    return res.status(503).json({
+      message: 'Payment service is temporarily unavailable. Please try again later.',
+    });
+  }
+
   res.status(500).json({
     message: 'Internal Server Error',
     ...(process.env.NODE_ENV !== 'production' ? { error: err.message } : {}),
