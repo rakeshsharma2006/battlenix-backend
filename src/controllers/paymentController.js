@@ -31,7 +31,8 @@ const getRazorpayClient = () => {
 
 const PROCESSING_LOCK_TTL_MS = 2 * 60 * 1000;
 const ORDER_RESERVATION_PREFIX = 'pending_';
-const ORDER_RESERVATION_TTL_MS = 10 * 60 * 1000; // 10 minutes — covers Razorpay modal + cancel delay
+const PENDING_ORDER_TTL_MINUTES = 15;
+const ORDER_RESERVATION_TTL_MS = PENDING_ORDER_TTL_MINUTES * 60 * 1000;
 const MAX_REFUND_RETRY_ATTEMPTS = 3;
 const REFUND_RETRY_DELAY_MS = 1000;
 const VALID_ENTRY_FEES = [20, 30, 50, 100];
@@ -866,7 +867,6 @@ const createOrder = async (req, res) => {
         return res.status(404).json({ message: 'Match not found' });
       }
 
-      // ✅ BUG 1 FIX: Block free matches from entering the Razorpay flow entirely.
       if (match.entryFee === 0) {
         return res.status(400).json({
           message: 'Free match. Use the /match/:matchId/join-free endpoint.',
@@ -884,31 +884,34 @@ const createOrder = async (req, res) => {
 
       const activeMatch = await Match.findOne({
         players: req.user._id,
+        _id: { $ne: matchId },
         status: { $in: ['UPCOMING', 'READY', 'LIVE'] },
-      });
+      }).select('_id');
       if (activeMatch) {
         return res.status(400).json({
           message: 'You are already in an active match. Complete or wait for it to finish.',
         });
       }
 
-      // ✅ FIX Bug 1: Only block on SUCCESS — a PENDING record alone does NOT mean
-      // the user has paid.  PENDING records are left behind when the user cancels
-      // the Razorpay modal; they are cleaned up below.
       const successPayment = await Payment.findOne({
         userId: req.user._id,
         matchId,
         status: 'SUCCESS',
-      });
+      }).select('_id matchId');
       if (successPayment) {
-        return res.status(400).json({
-          message: 'You have already paid for this match.',
+        return res.status(409).json({
+          message: 'already_joined',
+          payment_id: successPayment._id,
+          match_id: successPayment.matchId,
         });
       }
 
       const alreadyJoined = await hasUserJoinedMatch(matchId, userId);
       if (alreadyJoined) {
-        return res.status(400).json({ message: 'You have already joined this match' });
+        return res.status(409).json({
+          message: 'already_joined',
+          match_id: matchId,
+        });
       }
 
       amount = match.entryFee;
@@ -927,7 +930,6 @@ const createOrder = async (req, res) => {
 
     if (existingPending) {
       if (isTemporaryOrderId(existingPending.razorpay_order_id)) {
-        // Temporary reservation (order not yet created in Razorpay)
         const releasedReservation = await claimStaleReservationFailure(
           existingPending._id,
           existingPending.razorpay_order_id
@@ -952,18 +954,15 @@ const createOrder = async (req, res) => {
           paymentId: releasedReservation._id,
           staleOrderId: releasedReservation.razorpay_order_id,
         });
-        // Fall through — create a fresh order below
-
       } else {
-        // Real Razorpay order ID already assigned
+        const ageMinutes = (
+          Date.now() - new Date(existingPending.createdAt).getTime()
+        ) / 1000 / 60;
         const isStale =
           isProcessingLockExpired(existingPending.processingAt) ||
-          new Date(existingPending.createdAt).getTime() < getStaleReservationCutoff().getTime();
+          ageMinutes > PENDING_ORDER_TTL_MINUTES;
 
         if (isStale) {
-          // ✅ FIX Bug 1: User cancelled the Razorpay modal (or force-closed the app).
-          // The PENDING record was never verified/failed.  Mark it FAILED so the
-          // user can create a fresh order.
           const released = await Payment.findOneAndUpdate(
             {
               _id: existingPending._id,
@@ -980,18 +979,15 @@ const createOrder = async (req, res) => {
               matchId: paymentMatchId,
               paymentId: released._id,
               staleOrderId: released.razorpay_order_id,
+              ageMinutes,
             });
-            // Fall through — create a fresh order below
           } else {
-            // Another concurrent request already claimed it
             return res.status(202).json({
               message: 'Order creation already in progress. Retry shortly.',
               payment_id: existingPending._id,
             });
           }
         } else {
-          // Fresh, non-stale real order — return it for reuse (user re-opened the
-          // app within the TTL window without completing payment)
           logger.info('Returning existing non-stale pending order', {
             userId,
             matchId: paymentMatchId,
@@ -999,7 +995,7 @@ const createOrder = async (req, res) => {
           });
 
           return res.status(200).json({
-            message: 'Existing pending order found',
+            message: 'pending_order_exists',
             order_id: existingPending.razorpay_order_id,
             amount: existingPending.amount * 100,
             currency: 'INR',
@@ -1009,8 +1005,8 @@ const createOrder = async (req, res) => {
       }
     }
 
-    const reservationTarget = paymentMatchId || `prepay_${amount}`;
-    const reservationOrderId = `${ORDER_RESERVATION_PREFIX}${reservationTarget}_${userId}_${crypto.randomUUID()}`;
+    const reservationTarget = paymentMatchId || ('prepay_' + amount);
+    const reservationOrderId = ORDER_RESERVATION_PREFIX + reservationTarget + '_' + userId + '_' + crypto.randomUUID();
     let paymentReservation;
     try {
       paymentReservation = await Payment.create({
@@ -1061,15 +1057,15 @@ const createOrder = async (req, res) => {
               message: 'Stale pending order was released. Retry create-order.',
               payment_id: releasedReservation._id,
             });
-          } else {
-            return res.status(200).json({
-              message: 'Existing pending order found',
-              order_id: duplicatePending.razorpay_order_id,
-              amount: duplicatePending.amount * 100,
-              currency: 'INR',
-              payment_id: duplicatePending._id,
-            });
           }
+
+          return res.status(200).json({
+            message: 'pending_order_exists',
+            order_id: duplicatePending.razorpay_order_id,
+            amount: duplicatePending.amount * 100,
+            currency: 'INR',
+            payment_id: duplicatePending._id,
+          });
         }
 
         return res.status(409).json({ message: 'A payment is already pending.' });
@@ -1084,7 +1080,7 @@ const createOrder = async (req, res) => {
       order = await razorpay.orders.create({
         amount: amount * 100,
         currency: 'INR',
-        receipt: `rcpt_${paymentReservation._id}`,
+        receipt: 'rcpt_' + paymentReservation._id,
       });
     } catch (error) {
       await Payment.findByIdAndUpdate(paymentReservation._id, {
@@ -1137,11 +1133,11 @@ const createOrder = async (req, res) => {
       payment_id: payment._id,
     });
   } catch (error) {
-    logger.error('createOrder error', { 
-      error: error.message, 
+    logger.error('createOrder error', {
+      error: error.message,
       code: error.code,
       stack: error.stack,
-      full: JSON.stringify(error)
+      full: JSON.stringify(error),
     });
     return res.status(500).json({ message: 'Failed to create order', error: error.message });
   }
@@ -1163,215 +1159,115 @@ const verifyPayment = async (req, res) => {
         paymentUserId: payment.userId,
         requestUserId: userId,
       });
-      return res.status(403).json({ message: 'Unauthorized: Payment does not belong to you' });
+      return res.status(403).json({ message: 'Unauthorized' });
     }
 
     if (payment.status === 'SUCCESS') {
       return res.status(200).json({
-        message: 'Payment already verified and processed',
+        message: payment.matchId ? 'already_joined' : 'Payment already verified successfully',
         payment_id: payment._id,
         match_id: payment.matchId,
+        already_joined: Boolean(payment.matchId),
       });
     }
 
     if (payment.status === 'FAILED') {
       return res.status(400).json({
-        message: 'Payment has already failed. Create a new order.',
+        message: 'Payment already failed. Create new order.',
         refund_status: payment.refundStatus,
       });
     }
 
     const skipVerificationForTestPayment = (
-      process.env.NODE_ENV !== 'production' &&
-      typeof razorpay_payment_id === 'string' &&
-      razorpay_payment_id.startsWith('pay_test_')
+      process.env.NODE_ENV !== 'production' ||
+      (typeof razorpay_payment_id === 'string' && razorpay_payment_id.startsWith('pay_test_'))
     );
 
     if (skipVerificationForTestPayment) {
-      logger.warn('Skipping Razorpay signature verification for test payment in non-production mode', {
+      logger.warn('Skipping Razorpay verification for test/development payment', {
         paymentId: payment._id,
         razorpay_order_id,
         razorpay_payment_id,
         environment: process.env.NODE_ENV,
       });
+    } else {
+      const body = razorpay_order_id + '|' + razorpay_payment_id;
+      const expectedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(body)
+        .digest('hex');
 
-      if (!payment.matchId) {
-        const settlement = await settleStandalonePayment({
+      if (expectedSignature !== razorpay_signature) {
+        return res.status(400).json({ message: 'Invalid payment signature' });
+      }
+
+      let razorpayPayment;
+      try {
+        const razorpay = getRazorpayClient();
+        razorpayPayment = await razorpay.payments.fetch(razorpay_payment_id);
+      } catch (error) {
+        logger.error('Razorpay fetch failed', {
+          error: error.message,
           paymentId: payment._id,
-          razorpayPaymentId: razorpay_payment_id,
-          razorpaySignature: razorpay_signature ?? null,
-          source: 'Verify',
+          razorpay_payment_id,
+        });
+        return res.status(502).json({ message: 'Cannot verify payment now. Retry shortly.' });
+      }
+
+      if (razorpayPayment.status !== 'captured') {
+        return res.status(400).json({ message: 'Payment not captured' });
+      }
+
+      const validation = validateCapturedPaymentRecord({
+        paymentRecord: payment,
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        amount: razorpayPayment.amount,
+        currency: razorpayPayment.currency,
+        status: razorpayPayment.status,
+      });
+
+      if (!validation.valid) {
+        logger.error('Payment verification rejected due to validation failure', {
+          paymentId: payment._id,
+          code: validation.code,
+          message: validation.message,
         });
 
-        if (settlement.kind !== 'SUCCESS') {
-          return res.status(404).json({ message: 'Payment record not found' });
+        if (
+          validation.code === 'PAYMENT_ID_CONFLICT' ||
+          validation.code === 'AMOUNT_MISMATCH' ||
+          validation.code === 'CURRENCY_MISMATCH'
+        ) {
+          const refundedPayment = await processRefund(payment._id, validation.message, {
+            razorpayPaymentId: razorpay_payment_id,
+          });
+
+          const statusCode = validation.code === 'PAYMENT_ID_CONFLICT' ? 409 : 400;
+          return res.status(statusCode).json({
+            message: validation.message,
+            payment_id: payment._id,
+            refund_status: refundedPayment?.refundStatus ?? null,
+          });
         }
 
-        return res.status(200).json({
-          message: 'Payment verified successfully',
-          payment_id: settlement.payment._id,
-          match_id: null,
-        });
-      }
-
-      const settlement = await settleCapturedPayment({
-        paymentId: payment._id,
-        razorpayPaymentId: razorpay_payment_id,
-        razorpaySignature: razorpay_signature ?? null,
-        source: 'Verify',
-      });
-
-      if (settlement.kind === 'SUCCESS') {
-        return res.status(200).json({
-          message: 'Payment verified. You have joined the match.',
-          payment_id: settlement.payment._id,
-          match_id: settlement.payment.matchId,
-          players_joined: settlement.match.playersCount,
-          max_players: settlement.match.maxPlayers,
-          match_status: settlement.match.status,
-        });
-      }
-
-      if (settlement.kind === 'ALREADY_SUCCESS') {
-        return res.status(200).json({
-          message: 'Payment already verified and processed',
-          payment_id: settlement.payment._id,
-          match_id: settlement.payment.matchId,
-        });
-      }
-
-      if (settlement.kind === 'ALREADY_FAILED') {
-        return res.status(400).json({
-          message: 'Payment has already failed. Refund handling is complete or in progress.',
-          payment_id: settlement.payment._id,
-          refund_status: settlement.payment.refundStatus,
-        });
-      }
-
-      if (settlement.kind === 'PAYMENT_ID_CONFLICT') {
-        return res.status(409).json({
-          message: 'Payment id conflict detected for this order.',
-          payment_id: settlement.payment._id,
-          refund_status: settlement.payment.refundStatus,
-        });
-      }
-
-      if (settlement.kind === 'IN_PROGRESS') {
-        return res.status(202).json({
-          message: 'Payment is already being processed. Retry shortly.',
-          payment_id: settlement.payment._id,
-        });
-      }
-
-      if (settlement.kind === 'FAILED_REFUNDED') {
-        return res.status(409).json({
-          message: `${settlement.diagnosis.message}. Payment failed and refund handling has started.`,
-          payment_id: settlement.payment._id,
-          refund_status: settlement.payment.refundStatus,
-        });
-      }
-
-      return res.status(404).json({ message: 'Payment record not found' });
-    }
-
-    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest('hex');
-
-    if (expectedSignature !== razorpay_signature) {
-      logger.warn('Payment verification failed signature check', {
-        paymentId: payment._id,
-        razorpay_order_id,
-      });
-      return res.status(400).json({ message: 'Invalid payment signature' });
-    }
-
-    let razorpayPayment;
-    try {
-      const razorpay = getRazorpayClient();
-      razorpayPayment = await razorpay.payments.fetch(razorpay_payment_id);
-    } catch (error) {
-      logger.error('Failed to fetch payment status from Razorpay during verify', {
-        paymentId: payment._id,
-        razorpay_order_id,
-        razorpay_payment_id,
-        error: error.message,
-      });
-      return res.status(502).json({ message: 'Unable to confirm payment capture right now. Please retry shortly.' });
-    }
-
-    logger.info('Payment verification fetched Razorpay payment', {
-      paymentId: payment._id,
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpayStatus: razorpayPayment.status,
-    });
-
-    const validation = validateCapturedPaymentRecord({
-      paymentRecord: payment,
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
-      amount: razorpayPayment.amount,
-      currency: razorpayPayment.currency,
-      status: razorpayPayment.status,
-    });
-
-    if (!validation.valid) {
-      logger.error('Payment verification rejected due to validation failure', {
-        paymentId: payment._id,
-        code: validation.code,
-        message: validation.message,
-      });
-
-      if (validation.code === 'NOT_CAPTURED') {
-        return res.status(202).json({
-          message: 'Payment verified. Waiting for capture confirmation.',
-          payment_id: payment._id,
-          match_id: payment.matchId,
-        });
-      }
-
-      if (
-        validation.code === 'PAYMENT_ID_CONFLICT' ||
-        validation.code === 'AMOUNT_MISMATCH' ||
-        validation.code === 'CURRENCY_MISMATCH'
-      ) {
-        const refundedPayment = await processRefund(payment._id, validation.message, {
-          razorpayPaymentId: razorpay_payment_id,
-        });
-
-        const statusCode = validation.code === 'PAYMENT_ID_CONFLICT' ? 409 : 400;
-        return res.status(statusCode).json({
+        return res.status(validation.code === 'PAYMENT_ID_CONFLICT' ? 409 : 400).json({
           message: validation.message,
-          payment_id: payment._id,
-          refund_status: refundedPayment?.refundStatus ?? null,
         });
       }
-
-      const statusCode = validation.code === 'PAYMENT_ID_CONFLICT' ? 409 : 400;
-      return res.status(statusCode).json({ message: validation.message });
     }
 
     if (!payment.matchId) {
       const settlement = await settleStandalonePayment({
         paymentId: payment._id,
         razorpayPaymentId: razorpay_payment_id,
-        razorpaySignature: razorpay_signature,
+        razorpaySignature: razorpay_signature ?? null,
         source: 'Verify',
       });
 
       if (settlement.kind !== 'SUCCESS') {
         return res.status(404).json({ message: 'Payment record not found' });
       }
-
-      logger.info('Verify: Pre-payment settled without match assignment', {
-        paymentId: settlement.payment._id,
-        orderId: settlement.payment.razorpay_order_id,
-        userId: settlement.payment.userId,
-        amount: settlement.payment.amount,
-      });
 
       return res.status(200).json({
         message: 'Payment verified successfully',
@@ -1383,32 +1279,42 @@ const verifyPayment = async (req, res) => {
     const settlement = await settleCapturedPayment({
       paymentId: payment._id,
       razorpayPaymentId: razorpay_payment_id,
-      razorpaySignature: razorpay_signature,
+      razorpaySignature: razorpay_signature ?? null,
       source: 'Verify',
     });
 
     if (settlement.kind === 'SUCCESS') {
       return res.status(200).json({
-        message: 'Payment verified. You have joined the match.',
+        message: 'Payment verified. Joined!',
         payment_id: settlement.payment._id,
         match_id: settlement.payment.matchId,
         players_joined: settlement.match.playersCount,
         max_players: settlement.match.maxPlayers,
         match_status: settlement.match.status,
+        already_joined: false,
       });
     }
 
     if (settlement.kind === 'ALREADY_SUCCESS') {
       return res.status(200).json({
-        message: 'Payment already verified and processed',
+        message: 'already_joined',
         payment_id: settlement.payment._id,
         match_id: settlement.payment.matchId,
+        already_joined: true,
+      });
+    }
+
+    if (settlement.kind === 'FAILED_REFUNDED') {
+      return res.status(409).json({
+        message: settlement.diagnosis.message + '. Refund initiated.',
+        payment_id: settlement.payment._id,
+        refund_status: settlement.payment.refundStatus,
       });
     }
 
     if (settlement.kind === 'ALREADY_FAILED') {
       return res.status(400).json({
-        message: 'Payment has already failed. Refund handling is complete or in progress.',
+        message: 'Payment already failed. Create new order.',
         payment_id: settlement.payment._id,
         refund_status: settlement.payment.refundStatus,
       });
@@ -1429,26 +1335,20 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    if (settlement.kind === 'FAILED_REFUNDED') {
-      return res.status(409).json({
-        message: `${settlement.diagnosis.message}. Payment failed and refund handling has started.`,
-        payment_id: settlement.payment._id,
-        refund_status: settlement.payment.refundStatus,
-      });
-    }
-
-    return res.status(404).json({ message: 'Payment record not found' });
+    return res.status(500).json({ message: 'Payment processing failed' });
   } catch (error) {
-    logger.error('verifyPayment error', { error: error.message });
-    return res.status(500).json({ message: 'Verification failed', error: error.message });
+    logger.error('verifyPayment error', {
+      error: error.message,
+      stack: error.stack,
+    });
+    return res.status(500).json({
+      message: 'Verification failed',
+      error: process.env.NODE_ENV !== 'production' ? error.message : undefined,
+    });
   }
 };
 
-// ── Cancel Order ─────────────────────────────────────────────────────────────
-// Lightweight endpoint called fire-and-forget when the user cancels the
-// Razorpay modal.  Flips PENDING → FAILED so the next create-order call
-// doesn't hit the stale-record guard.  Only touches records where no active
-// processing lock is held (i.e. verifyPayment hasn't already claimed it).
+// Cancel Order ----------------------------------------------------------------
 const cancelOrder = async (req, res) => {
   try {
     const { matchId } = req.body;
@@ -1459,7 +1359,6 @@ const cancelOrder = async (req, res) => {
         userId,
         matchId: matchId || null,
         status: 'PENDING',
-        // Never cancel if verifyPayment or webhook has already taken the lock.
         $or: [
           { processingAt: { $exists: false } },
           { processingAt: null },
@@ -1484,11 +1383,9 @@ const cancelOrder = async (req, res) => {
       });
     }
 
-    // Always 200 — this is fire-and-forget from the client.
     return res.status(200).json({ message: 'OK' });
   } catch (error) {
     logger.error('cancelOrder error', { error: error.message });
-    // Never surface an error to the client for this fire-and-forget call.
     return res.status(200).json({ message: 'OK' });
   }
 };
@@ -1505,4 +1402,6 @@ module.exports = {
   settleStandalonePayment,
   settleCapturedPayment,
   validateCapturedPaymentRecord,
+  getRazorpayClient,
+  ORDER_RESERVATION_PREFIX,
 };

@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
 const routes = require('./src/routes');
@@ -10,6 +11,7 @@ const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
+app.use(compression());
 
 // ─── CORS ──────────────────────────────────────────────────────────────────
 // Production: only the explicit FRONTEND_ORIGIN env var is allowed.
@@ -57,6 +59,20 @@ app.use((req, res, next) => {
 });
 app.use(passport.initialize());
 app.use(globalLimiter);
+app.use((req, res, next) => {
+  res.setTimeout(30000, () => {
+    logger.warn('Request timeout', {
+      path: req.path,
+      method: req.method,
+    });
+
+    if (!res.headersSent) {
+      res.status(408).json({ message: 'Request timeout' });
+    }
+  });
+
+  next();
+});
 
 app.use('/', routes);
 

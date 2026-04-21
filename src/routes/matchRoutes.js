@@ -1,9 +1,12 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 const router = express.Router();
 const {
   createMatch,
   listMatches,
   getMatch,
+  getJoinStatus,
   getMatchRoom,
   getMatchPlayers,
   updateMatch,
@@ -19,15 +22,45 @@ const adminMiddleware = require('../middlewares/adminMiddleware');
 const validate = require('../middlewares/validationMiddleware');
 const { matchSchemas } = require('../validators/schemas');
 
-// Public listing — but if auth token present, isJoined will be populated
-router.get('/', listMatches);
+const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET;
+
+const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    if (decoded.type && decoded.type !== 'access') {
+      return next();
+    }
+
+    const userId = decoded._id || decoded.userId || decoded.id;
+    if (!userId) {
+      return next();
+    }
+
+    const user = await User.findById(userId).select('-password').lean();
+    if (user) {
+      req.user = user;
+    }
+  } catch (_error) {
+    // Ignore auth errors for optional auth routes.
+  }
+
+  next();
+};
+
+router.get('/', optionalAuth, listMatches);
+router.get('/:id/join-status', authMiddleware, validate({ params: matchSchemas.matchIdParams }), getJoinStatus);
 router.get('/:id/room', authMiddleware, validate({ params: matchSchemas.matchIdParams }), getMatchRoom);
 router.get('/:id/players', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams }), getMatchPlayers);
-// BUG 2 FIX: getMatch now accepts optional auth so it can return isJoined
-router.get('/:id', validate({ params: matchSchemas.matchIdParams }), getMatch);
+router.get('/:id', optionalAuth, validate({ params: matchSchemas.matchIdParams }), getMatch);
 
 router.post('/', authMiddleware, adminMiddleware, validate({ body: matchSchemas.createMatchBody }), createMatch);
-// BUG 1 FIX: join-free endpoint — requires auth, no admin role
 router.post('/:id/join-free', authMiddleware, validate({ params: matchSchemas.matchIdParams }), joinFreeMatch);
 router.patch('/:id', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.updateMatchBody }), updateMatch);
 router.patch('/:id/status', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.statusBody }), setMatchStatus);

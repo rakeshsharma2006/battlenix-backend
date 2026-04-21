@@ -2,15 +2,23 @@ const crypto = require('crypto');
 const Payment = require('../models/Payment');
 const JobLock = require('../models/JobLock');
 const logger = require('../utils/logger');
-const { processRefund } = require('../controllers/paymentController');
+const {
+  processRefund,
+  getRazorpayClient,
+  ORDER_RESERVATION_PREFIX,
+} = require('../controllers/paymentController');
 
 const TIMEOUT_MINUTES = 15;
 const LOCK_TIMEOUT_MINUTES = 2;
-const INTERVAL_MS = 60 * 1000;
+const INTERVAL_MS = 30 * 1000;
 const CLEANUP_JOB_LOCK_ID = 'payment_cleanup_job';
 const CLEANUP_JOB_LOCK_TTL_MS = 5 * 60 * 1000;
 
 let isCleanupRunning = false;
+
+const isReservationOrderId = (orderId) => (
+  typeof orderId === 'string' && orderId.startsWith(ORDER_RESERVATION_PREFIX)
+);
 
 const acquireCleanupJobLock = async () => {
   const now = new Date();
@@ -114,28 +122,139 @@ const cleanupStalePendingPayments = async () => {
     }
   }
 
-  const result = await Payment.updateMany(
-    {
-      status: 'PENDING',
-      createdAt: { $lt: cutoff },
-      $or: [
-        { razorpay_payment_id: { $exists: false } },
-        { razorpay_payment_id: null },
-      ],
-    },
-    {
-      $set: {
-        status: 'FAILED',
-        processingAt: null,
-      },
-    }
-  );
-
-  const totalExpired = refundedCapturedCount + result.modifiedCount;
-  if (totalExpired > 0) {
+  if (refundedCapturedCount > 0) {
     logger.info('Payment cleanup: Expired pending payments', {
-      count: totalExpired,
+      count: refundedCapturedCount,
       refundedCapturedCount,
+      cutoff: cutoff.toISOString(),
+    });
+  }
+};
+
+const cleanupCancelledPending = async () => {
+  const cutoff = new Date(Date.now() - TIMEOUT_MINUTES * 60 * 1000);
+  const stalePending = await Payment.find({
+    status: 'PENDING',
+    createdAt: { $lt: cutoff },
+    $or: [
+      { razorpay_payment_id: { $exists: false } },
+      { razorpay_payment_id: null },
+    ],
+  }).select('_id razorpay_order_id createdAt');
+
+  let razorpay = null;
+  try {
+    razorpay = getRazorpayClient();
+  } catch (error) {
+    logger.warn('Payment cleanup: Razorpay client unavailable for stale pending inspection', {
+      error: error.message,
+    });
+  }
+
+  let clearedCount = 0;
+
+  for (const payment of stalePending) {
+    const ageMinutes = (Date.now() - payment.createdAt.getTime()) / 1000 / 60;
+
+    if (!payment.razorpay_order_id || isReservationOrderId(payment.razorpay_order_id)) {
+      const released = await Payment.findOneAndUpdate(
+        {
+          _id: payment._id,
+          status: 'PENDING',
+        },
+        {
+          $set: {
+            status: 'FAILED',
+            processingAt: null,
+          },
+        },
+        { new: true }
+      );
+
+      if (released) {
+        clearedCount += 1;
+      }
+
+      continue;
+    }
+
+    if (!razorpay) {
+      if (ageMinutes > 30) {
+        const released = await Payment.findOneAndUpdate(
+          {
+            _id: payment._id,
+            status: 'PENDING',
+          },
+          {
+            $set: {
+              status: 'FAILED',
+              processingAt: null,
+            },
+          },
+          { new: true }
+        );
+
+        if (released) {
+          clearedCount += 1;
+        }
+      }
+
+      continue;
+    }
+
+    try {
+      const order = await razorpay.orders.fetch(payment.razorpay_order_id);
+
+      if (order.status === 'created' || order.status === 'attempted') {
+        const released = await Payment.findOneAndUpdate(
+          {
+            _id: payment._id,
+            status: 'PENDING',
+          },
+          {
+            $set: {
+              status: 'FAILED',
+              processingAt: null,
+            },
+          },
+          { new: true }
+        );
+
+        if (released) {
+          clearedCount += 1;
+          logger.info('Stale payment marked failed', {
+            paymentId: payment._id,
+            orderId: payment.razorpay_order_id,
+            razorpayStatus: order.status,
+          });
+        }
+      }
+    } catch (error) {
+      if (ageMinutes > 30) {
+        const released = await Payment.findOneAndUpdate(
+          {
+            _id: payment._id,
+            status: 'PENDING',
+          },
+          {
+            $set: {
+              status: 'FAILED',
+              processingAt: null,
+            },
+          },
+          { new: true }
+        );
+
+        if (released) {
+          clearedCount += 1;
+        }
+      }
+    }
+  }
+
+  if (clearedCount > 0) {
+    logger.info('Payment cleanup: Cancelled or stale pending payments cleared', {
+      count: clearedCount,
       cutoff: cutoff.toISOString(),
     });
   }
@@ -178,6 +297,7 @@ const runPaymentCleanup = async () => {
   isCleanupRunning = true;
   try {
     await cleanupStalePendingPayments();
+    await cleanupCancelledPending();
     await cleanupStaleProcessingLocks();
   } catch (error) {
     logger.error('Payment cleanup error', { error: error.message });
@@ -201,5 +321,6 @@ const startPaymentCleanupJob = () => {
 module.exports = {
   startPaymentCleanupJob,
   cleanupStalePendingPayments,
+  cleanupCancelledPending,
   cleanupStaleProcessingLocks,
 };

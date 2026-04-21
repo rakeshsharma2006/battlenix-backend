@@ -93,6 +93,32 @@ const buildMatchPlayers = (match) => {
   });
 };
 
+const getDefaultUserJoinStatus = () => ({
+  joined: false,
+  paymentStatus: null,
+  paymentId: null,
+  paidAt: null,
+});
+
+const hasJoinedPlayersArray = (players, userId) => {
+  if (!userId || !Array.isArray(players)) {
+    return false;
+  }
+
+  return players.some((player) => String(player?._id || player) === String(userId));
+};
+
+const buildUserJoinStatus = ({ players, userId, payment = null }) => ({
+  joined: hasJoinedPlayersArray(players, userId) || payment?.status === 'SUCCESS',
+  paymentStatus: payment?.status || null,
+  paymentId: payment?._id || null,
+  paidAt: payment?.createdAt || null,
+});
+
+const getPreferredPayment = (payments = []) => (
+  payments.find((payment) => payment.status === 'SUCCESS') || payments[0] || null
+);
+
 const validateResultsPayload = (match, winner, results) => {
   if (!winner || !isValidObjectId(winner)) {
     const err = new Error('winner is required and must be a valid user id');
@@ -269,32 +295,44 @@ const listMatches = async (req, res) => {
       .limit(limit)
       .lean();
 
-    // BUG 2 FIX: attach isJoined per-match for authenticated users.
-    // Uses a single $in aggregation — no N+1 loop.
-    let joinedMatchIds = new Set();
-    if (req.user?._id) {
-      const successPayments = await Payment.find({
-        userId: req.user._id,
-        matchId: { $in: matches.map((m) => m._id) },
-        status: 'SUCCESS',
-      }).select('matchId').lean();
+    const userId = req.user?._id || null;
+    const paymentByMatchId = new Map();
 
-      // Also check free matches (player in players array)
-      const freeJoins = await Match.find({
-        _id: { $in: matches.map((m) => m._id) },
-        players: req.user._id,
-        entryFee: 0,
-      }).select('_id').lean();
+    if (userId && matches.length > 0) {
+      const userPayments = await Payment.find({
+        userId,
+        matchId: { $in: matches.map((match) => match._id) },
+        status: { $in: ['SUCCESS', 'PENDING'] },
+      })
+        .select('matchId status createdAt')
+        .sort({ createdAt: -1 })
+        .lean();
 
-      successPayments.forEach((p) => joinedMatchIds.add(String(p.matchId)));
-      freeJoins.forEach((m) => joinedMatchIds.add(String(m._id)));
+      for (const payment of userPayments) {
+        const matchId = String(payment.matchId);
+        const existingPayment = paymentByMatchId.get(matchId);
+        paymentByMatchId.set(matchId, getPreferredPayment([existingPayment, payment].filter(Boolean)));
+      }
     }
 
-    return res.status(200).json({
-      matches: matches.map((match) => ({
+    const matchesWithStatus = matches.map((match) => {
+      const userJoinStatus = userId
+        ? buildUserJoinStatus({
+            players: match.players,
+            userId,
+            payment: paymentByMatchId.get(String(match._id)) || null,
+          })
+        : getDefaultUserJoinStatus();
+
+      return {
         ...serializeMatch(match),
-        isJoined: joinedMatchIds.has(String(match._id)),
-      })),
+        isJoined: userJoinStatus.joined,
+        userJoinStatus,
+      };
+    });
+
+    return res.status(200).json({
+      matches: matchesWithStatus,
       page,
       limit,
     });
@@ -311,28 +349,72 @@ const getMatch = async (req, res) => {
       return res.status(404).json({ message: 'Match not found' });
     }
 
-    // BUG 2 FIX: include isJoined so client can show "Enter Lobby" on reload.
-    let isJoined = false;
+    let userJoinStatus = getDefaultUserJoinStatus();
     if (req.user?._id) {
-      if (match.entryFee === 0) {
-        // Free match — check player array directly
-        isJoined = match.players.some(
-          (p) => String(p._id || p) === String(req.user._id)
-        );
-      } else {
-        const successPayment = await Payment.findOne({
-          userId: req.user._id,
-          matchId: match._id,
-          status: 'SUCCESS',
-        }).select('_id').lean();
-        isJoined = Boolean(successPayment);
-      }
+      const payments = await Payment.find({
+        userId: req.user._id,
+        matchId: match._id,
+        status: { $in: ['SUCCESS', 'PENDING'] },
+      })
+        .select('status amount createdAt')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      userJoinStatus = buildUserJoinStatus({
+        players: match.players,
+        userId: req.user._id,
+        payment: getPreferredPayment(payments),
+      });
     }
 
-    return res.status(200).json({ match: { ...serializeMatch(match), isJoined } });
+    return res.status(200).json({
+      match: {
+        ...serializeMatch(match),
+        isJoined: userJoinStatus.joined,
+        userJoinStatus,
+      },
+    });
   } catch (error) {
     logger.error('getMatch error', { error: error.message });
     return res.status(500).json({ message: 'Failed to fetch match', error: error.message });
+  }
+};
+
+const getJoinStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const match = await Match.findById(id).select('players status');
+    if (!match) {
+      return res.status(404).json({ message: 'Match not found' });
+    }
+
+    const payments = await Payment.find({
+      userId,
+      matchId: id,
+      status: { $in: ['SUCCESS', 'PENDING'] },
+    })
+      .select('status amount createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const userJoinStatus = buildUserJoinStatus({
+      players: match.players,
+      userId,
+      payment: getPreferredPayment(payments),
+    });
+
+    return res.status(200).json({
+      joined: userJoinStatus.joined,
+      paymentStatus: userJoinStatus.paymentStatus,
+      paymentId: userJoinStatus.paymentId,
+      paidAt: userJoinStatus.paidAt,
+      matchStatus: match.status,
+    });
+  } catch (error) {
+    logger.error('getJoinStatus error', { error: error.message });
+    return res.status(500).json({ message: 'Failed to check join status' });
   }
 };
 
@@ -898,6 +980,7 @@ module.exports = {
   createMatch,
   listMatches,
   getMatch,
+  getJoinStatus,
   getMatchRoom,
   getMatchPlayers,
   updateMatch,
