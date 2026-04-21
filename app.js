@@ -48,9 +48,12 @@ app.use((req, res, next) => {
   req.timedout = false;
   req.timeoutController = new AbortController();
   req.timeoutSignal = req.timeoutController.signal;
-  req.setTimeout(REQUEST_TIMEOUT_MS);
 
-  const timeoutId = setTimeout(() => {
+  const handleTimeout = () => {
+    if (req.timedout) {
+      return;
+    }
+
     req.timedout = true;
     req.timeoutController.abort(new Error('Request timeout'));
 
@@ -62,9 +65,17 @@ app.use((req, res, next) => {
     if (!res.headersSent) {
       res.status(408).json({ message: 'Request timeout' });
     }
-  }, REQUEST_TIMEOUT_MS);
+  };
 
-  const clearDeadline = () => clearTimeout(timeoutId);
+  req.setTimeout(REQUEST_TIMEOUT_MS);
+  req.on('timeout', handleTimeout);
+
+  const timeoutId = setTimeout(handleTimeout, REQUEST_TIMEOUT_MS);
+
+  const clearDeadline = () => {
+    clearTimeout(timeoutId);
+    req.off('timeout', handleTimeout);
+  };
   res.on('finish', clearDeadline);
   res.on('close', clearDeadline);
 
