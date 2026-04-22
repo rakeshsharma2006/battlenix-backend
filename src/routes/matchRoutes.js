@@ -61,7 +61,12 @@ router.get('/:id/players', authMiddleware, adminMiddleware, validate({ params: m
 router.get('/:id', optionalAuth, validate({ params: matchSchemas.matchIdParams }), getMatch);
 
 router.post('/', authMiddleware, adminMiddleware, validate({ body: matchSchemas.createMatchBody }), createMatch);
-router.post('/:id/join-free', authMiddleware, validate({ params: matchSchemas.matchIdParams }), joinFreeMatch);
+router.post(
+  '/:id/join-free',
+  authMiddleware,
+  validate({ params: matchSchemas.matchIdParams }),
+  joinFreeMatch
+);
 router.patch('/:id', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.updateMatchBody }), updateMatch);
 router.patch('/:id/status', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.statusBody }), setMatchStatus);
 router.patch('/:id/chat-toggle', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.chatToggleBody }), toggleChat);
@@ -70,5 +75,4 @@ router.post('/:id/publish-room', authMiddleware, adminMiddleware, validate({ par
 router.post('/:id/result', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.submitResultBody }), submitResult);
 
 module.exports = router;
-
 
