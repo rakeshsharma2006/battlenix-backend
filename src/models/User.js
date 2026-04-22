@@ -66,6 +66,11 @@ const userSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    avatar: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     role: {
       type: String,
       enum: ['user', 'manager', 'admin'],

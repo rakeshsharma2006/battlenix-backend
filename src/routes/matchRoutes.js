@@ -70,3 +70,5 @@ router.post('/:id/publish-room', authMiddleware, adminMiddleware, validate({ par
 router.post('/:id/result', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.submitResultBody }), submitResult);
 
 module.exports = router;
+
+

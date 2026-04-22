@@ -1,57 +1,89 @@
+const crypto = require('crypto');
 const passport = require('passport');
 const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
+const logger = require('../utils/logger');
 
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: '/auth/google/callback',
-    },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        // Try to find by googleId first for speed, then fall back to email
-        let user = await User.findOne({
-          $or: [
-            { googleId: profile.id },
-            { email: profile.emails[0].value },
-          ],
-        });
+const buildGoogleUsername = (displayName = 'player') => {
+  const baseUsername = displayName
+    .replace(/\s+/g, '_')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 20);
 
-        if (!user) {
-          // Create new user with a random secure password
-          const randomPass = await bcrypt.hash(
-            Math.random().toString(36) + Date.now(),
-            10
-          );
+  return baseUsername || 'player';
+};
 
-          const baseUsername = profile.displayName
-            .replace(/\s+/g, '_')
-            .toLowerCase()
-            .replace(/[^a-z0-9_]/g, '')
-            .slice(0, 20);
-
-          user = await User.create({
-            username: `${baseUsername}_${Date.now().toString().slice(-4)}`,
-            email: profile.emails[0].value,
-            password: randomPass,
-            googleId: profile.id,
-            role: 'user',
-          });
-        } else if (!user.googleId) {
-          // Existing email-based user — link their Google account
-          user.googleId = profile.id;
-          await user.save();
-        }
-
-        return done(null, user);
-      } catch (err) {
-        return done(err, null);
-      }
-    }
-  )
+const generateTemporaryPassword = () => crypto.randomBytes(32).toString('hex');
+const isGoogleOAuthConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
 );
+
+if (isGoogleOAuthConfigured) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: '/auth/google/callback',
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          const email = profile.emails?.[0]?.value?.toLowerCase().trim();
+
+          if (!email) {
+            return done(null, false, { message: 'Google account email is unavailable' });
+          }
+
+          const avatar = profile.photos?.[0]?.value || null;
+
+          let user = await User.findOne({
+            $or: [
+              { googleId: profile.id },
+              { email },
+            ],
+          });
+
+          if (!user) {
+            const baseUsername = buildGoogleUsername(profile.displayName);
+
+            user = await User.create({
+              username: `${baseUsername}_${Date.now().toString().slice(-5)}`,
+              email,
+              password: generateTemporaryPassword(),
+              googleId: profile.id,
+              avatar,
+              role: 'user',
+            });
+          } else {
+            let dirty = false;
+
+            if (!user.googleId) {
+              user.googleId = profile.id;
+              dirty = true;
+            }
+
+            if (avatar && user.avatar !== avatar) {
+              user.avatar = avatar;
+              dirty = true;
+            }
+
+            if (dirty) {
+              await user.save();
+            }
+          }
+
+          return done(null, user);
+        } catch (err) {
+          return done(err, null);
+        }
+      }
+    )
+  );
+} else {
+  logger.warn('Google browser OAuth flow disabled: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be set.');
+}
+
+passport.isGoogleOAuthConfigured = isGoogleOAuthConfigured;
 
 module.exports = passport;
