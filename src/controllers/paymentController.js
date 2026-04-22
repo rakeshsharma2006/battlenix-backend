@@ -855,35 +855,22 @@ const createOrder = async (req, res) => {
     let amount = null;
     const paymentMatchId = matchId || null;
 
-    if (!matchId && !entryFee) {
+    if (!matchId && entryFee === undefined) {
       return res.status(400).json({ message: 'Either matchId or entryFee is required' });
     }
 
     if (matchId) {
       match = await Match.findById(matchId)
-        .select('status playersCount maxPlayers entryFee');
+        .select('title status playersCount maxPlayers entryFee entryType mode');
 
       if (!match) {
         return res.status(404).json({ message: 'Match not found' });
       }
 
-      if (match.entryFee === 0) {
-        return res.status(400).json({
-          message: 'Free match. Use the /match/:matchId/join-free endpoint.',
-          code: 'FREE_MATCH_USE_JOIN_FREE',
-        });
-      }
-
-      if (match.status !== 'UPCOMING') {
-        return res.status(400).json({ message: getJoinRestrictionMessage(match.status) });
-      }
-
-      if (match.playersCount >= match.maxPlayers) {
-        return res.status(400).json({ message: 'Match is full' });
-      }
+      const isFreeMatch = match.entryFee === 0 || match.entryType === 'FREE';
 
       const activeMatch = await Match.findOne({
-        players: req.user._id,
+        players: userId,
         _id: { $ne: matchId },
         status: { $in: ['UPCOMING', 'READY', 'LIVE'] },
       }).select('_id');
@@ -897,10 +884,12 @@ const createOrder = async (req, res) => {
         userId: req.user._id,
         matchId,
         status: 'SUCCESS',
-      }).select('_id matchId');
+      }).select('_id matchId entryType');
       if (successPayment) {
-        return res.status(409).json({
+        return res.status(200).json({
           message: 'already_joined',
+          already_joined: true,
+          free_match: isFreeMatch,
           payment_id: successPayment._id,
           match_id: successPayment.matchId,
         });
@@ -908,9 +897,83 @@ const createOrder = async (req, res) => {
 
       const alreadyJoined = await hasUserJoinedMatch(matchId, userId);
       if (alreadyJoined) {
-        return res.status(409).json({
+        return res.status(200).json({
           message: 'already_joined',
+          already_joined: true,
+          free_match: isFreeMatch,
           match_id: matchId,
+        });
+      }
+
+      if (match.status !== 'UPCOMING') {
+        return res.status(400).json({ message: getJoinRestrictionMessage(match.status) });
+      }
+
+      if (match.playersCount >= match.maxPlayers) {
+        return res.status(400).json({ message: 'Match is full' });
+      }
+
+      if (isFreeMatch) {
+        const updatedMatch = await atomicJoin(matchId, userId, match.maxPlayers, { mode: match.mode });
+
+        if (!updatedMatch) {
+          const diagnosis = await diagnoseJoinFailure(matchId, userId);
+
+          if (diagnosis.status === 'DUPLICATE') {
+            return res.status(200).json({
+              message: 'already_joined',
+              already_joined: true,
+              free_match: true,
+              match_id: matchId,
+            });
+          }
+
+          return res.status(diagnosis.status === 404 ? 404 : 400).json({
+            message: diagnosis.message,
+          });
+        }
+
+        let freePayment = await Payment.findOne({
+          userId,
+          matchId,
+          status: 'SUCCESS',
+        }).select('_id');
+
+        if (!freePayment) {
+          try {
+            freePayment = await Payment.create({
+              userId,
+              matchId,
+              razorpay_order_id: `free_${matchId}_${userId}_${crypto.randomUUID()}`,
+              amount: 0,
+              currency: 'INR',
+              status: 'SUCCESS',
+              entryType: 'FREE',
+            });
+          } catch (error) {
+            logger.warn('Free match joined but payment record could not be created immediately', {
+              userId,
+              matchId,
+              error: error.message,
+            });
+          }
+        }
+
+        logger.info('User joined free match via createOrder', {
+          userId,
+          matchId,
+          matchTitle: updatedMatch.title,
+          playersJoined: updatedMatch.playersCount,
+          matchStatus: updatedMatch.status,
+        });
+
+        return res.status(200).json({
+          message: 'Joined free match!',
+          already_joined: false,
+          free_match: true,
+          payment_id: freePayment?._id || null,
+          players_joined: updatedMatch.playersCount,
+          match_status: updatedMatch.status,
         });
       }
 

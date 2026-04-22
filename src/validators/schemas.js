@@ -58,14 +58,53 @@ const authSchemas = {
   }).transform((data) => ({
     idToken: data.idToken || data.credential || data.token,
   })),
+  googleVerifyBody: z.object({
+    idToken: z.string().trim().min(1).optional(),
+    credential: z.string().trim().min(1).optional(),
+    token: z.string().trim().min(1).optional(),
+    googleToken: z.string().trim().min(1).optional(),
+    email: z.string().trim().email().optional(),
+    displayName: z.string().trim().min(1).max(100).optional(),
+    googleId: z.string().trim().min(1).optional(),
+  }).strict().superRefine((data, ctx) => {
+    if (!data.idToken && !data.credential && !data.token && !data.googleToken && !data.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['idToken'],
+        message: 'Either a Google token or email is required',
+      });
+    }
+  }),
 };
 
 const paymentSchemas = {
   createOrderBody: z.object({
     matchId: objectIdSchema.optional(),
-    entryFee: entryFeeSchema.optional(),
-  }).refine((data) => data.matchId || data.entryFee, {
-    message: 'Either matchId or entryFee is required',
+    entryFee: z.coerce.number().min(0).optional(),
+  }).superRefine((data, ctx) => {
+    if (!data.matchId && data.entryFee === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['matchId'],
+        message: 'Either matchId or entryFee is required',
+      });
+    }
+
+    if (data.entryFee !== undefined && data.entryFee !== 0 && !VALID_FEES.includes(data.entryFee)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['entryFee'],
+        message: `Entry fee must be ${VALID_FEES.join(', ')}, or 0 when joining a free match by matchId`,
+      });
+    }
+
+    if (!data.matchId && data.entryFee === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['entryFee'],
+        message: `Standalone entry fee must be ${VALID_FEES.join(', ')}`,
+      });
+    }
   }),
   verifyPaymentBody: z.object({
     razorpay_order_id: z.string().trim().min(1),

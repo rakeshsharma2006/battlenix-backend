@@ -29,6 +29,7 @@ const paymentSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true, // stored in rupees (e.g. 50 = Rs 50)
+      min: 0,
     },
     currency: {
       type: String,
@@ -41,6 +42,12 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       enum: ['PENDING', 'SUCCESS', 'FAILED'],
       default: 'PENDING',
+      index: true,
+    },
+    entryType: {
+      type: String,
+      enum: ['FREE', 'PAID'],
+      default: 'PAID',
       index: true,
     },
     processingAt: {

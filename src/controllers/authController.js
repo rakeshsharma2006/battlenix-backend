@@ -28,6 +28,22 @@ const buildAuthResponse = async (user, message) => {
   };
 };
 
+const buildGoogleAuthResponse = async (user, message = 'Google sign-in successful') => {
+  const tokens = await issueAuthTokens(user);
+
+  return {
+    success: true,
+    message,
+    token: tokens.accessToken,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    user: {
+      ...buildUserPayload(user),
+      avatar: user.avatar || null,
+    },
+  };
+};
+
 const buildGoogleUsername = (displayName = 'player') => {
   const baseUsername = displayName
     .replace(/\s+/g, '_')
@@ -39,6 +55,83 @@ const buildGoogleUsername = (displayName = 'player') => {
 };
 
 const generateTemporaryPassword = () => crypto.randomBytes(32).toString('hex');
+
+const generateUniqueGoogleUsername = async (displayName, email) => {
+  const fallbackName = displayName || email?.split('@')[0] || 'player';
+  const baseUsername = buildGoogleUsername(fallbackName);
+  let username = baseUsername;
+  let suffix = 1;
+
+  while (await User.exists({ username })) {
+    const suffixValue = String(suffix);
+    username = `${baseUsername.slice(0, Math.max(1, 20 - suffixValue.length))}${suffixValue}`;
+    suffix += 1;
+  }
+
+  return username;
+};
+
+const findOrCreateGoogleUser = async ({
+  email,
+  googleId = null,
+  displayName = null,
+  avatar = null,
+  source = 'google',
+}) => {
+  const normalizedEmail = email.toLowerCase().trim();
+  const googleLookup = googleId ? [{ googleId }] : [];
+  let user = await User.findOne({
+    $or: [
+      { email: normalizedEmail },
+      ...googleLookup,
+    ],
+  });
+
+  if (!user) {
+    const username = await generateUniqueGoogleUsername(displayName, normalizedEmail);
+
+    user = await User.create({
+      username,
+      email: normalizedEmail,
+      password: generateTemporaryPassword(),
+      googleId,
+      avatar: avatar || null,
+      role: 'user',
+    });
+
+    logger.info('New user created via Google Sign-In', {
+      source,
+      userId: user._id,
+      email: normalizedEmail,
+    });
+
+    return user;
+  }
+
+  let isDirty = false;
+
+  if (!user.googleId && googleId) {
+    user.googleId = googleId;
+    isDirty = true;
+  }
+
+  if (avatar && user.avatar !== avatar) {
+    user.avatar = avatar;
+    isDirty = true;
+  }
+
+  if (isDirty) {
+    await user.save();
+  }
+
+  logger.info('Existing user signed in via Google', {
+    source,
+    userId: user._id,
+    email: normalizedEmail,
+  });
+
+  return user;
+};
 
 const register = async (req, res) => {
   try {
@@ -155,7 +248,7 @@ const getMe = async (req, res) => {
 
 const googleSignIn = async (req, res) => {
   try {
-    const idToken = req.body.idToken || req.body.credential || req.body.token;
+    const idToken = req.body.idToken || req.body.credential || req.body.token || req.body.googleToken;
 
     if (!idToken) {
       return res.status(400).json({ success: false, message: 'idToken is required' });
@@ -184,59 +277,53 @@ const googleSignIn = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Google login failed' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-    let user = await User.findOne({ $or: [{ googleId }, { email: normalizedEmail }] });
-
-    if (!user) {
-      const baseUsername = buildGoogleUsername(name);
-
-      user = await User.create({
-        username: `${baseUsername}_${Date.now().toString().slice(-5)}`,
-        email: normalizedEmail,
-        password: generateTemporaryPassword(),
-        googleId,
-        avatar: picture || null,
-        role: 'user',
-      });
-
-      logger.info('New user created via Google Sign-In', { userId: user._id, email: normalizedEmail });
-    } else {
-      let dirty = false;
-
-      if (!user.googleId) {
-        user.googleId = googleId;
-        dirty = true;
-      }
-
-      if (picture && user.avatar !== picture) {
-        user.avatar = picture;
-        dirty = true;
-      }
-
-      if (dirty) {
-        await user.save();
-      }
-
-      logger.info('Existing user signed in via Google', { userId: user._id, email: normalizedEmail });
-    }
-
-    const tokens = await issueAuthTokens(user);
-
-    return res.status(200).json({
-      success: true,
-      message: 'Google sign-in successful',
-      token: tokens.accessToken,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      user: {
-        ...buildUserPayload(user),
-        avatar: user.avatar || null,
-      },
+    const user = await findOrCreateGoogleUser({
+      email,
+      googleId,
+      displayName: name,
+      avatar: picture || null,
+      source: 'verified_id_token',
     });
+
+    return res.status(200).json(await buildGoogleAuthResponse(user));
   } catch (error) {
     logger.error('Google Sign-In error', { error: error.message });
     return res.status(500).json({ success: false, message: 'Google login failed' });
   }
 };
 
-module.exports = { register, login, refresh, getMe, googleSignIn };
+const googleVerify = async (req, res) => {
+  try {
+    const verifiedToken = req.body.idToken || req.body.credential || req.body.token || req.body.googleToken;
+
+    if (verifiedToken) {
+      req.body.idToken = verifiedToken;
+      return googleSignIn(req, res);
+    }
+
+    const { email, displayName, googleId } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    logger.warn('Using legacy Google verify fallback without ID token verification', {
+      email: email.toLowerCase().trim(),
+      googleId: googleId || null,
+    });
+
+    const user = await findOrCreateGoogleUser({
+      email,
+      googleId: googleId || null,
+      displayName: displayName || null,
+      source: 'legacy_verify',
+    });
+
+    return res.status(200).json(await buildGoogleAuthResponse(user));
+  } catch (error) {
+    logger.error('Google verify error', { error: error.message, stack: error.stack });
+    return res.status(500).json({ success: false, message: 'Google login failed' });
+  }
+};
+
+module.exports = { register, login, refresh, getMe, googleSignIn, googleVerify };

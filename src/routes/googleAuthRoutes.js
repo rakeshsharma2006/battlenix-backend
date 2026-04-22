@@ -4,7 +4,7 @@ const passport = require('../config/passport');
 const validate = require('../middlewares/validationMiddleware');
 const { issueAuthTokens } = require('../services/tokenService');
 const logger = require('../utils/logger');
-const { googleSignIn } = require('../controllers/authController');
+const { googleSignIn, googleVerify } = require('../controllers/authController');
 const { authLimiter } = require('../middlewares/rateLimiters');
 const { authSchemas } = require('../validators/schemas');
 
@@ -68,7 +68,8 @@ router.get('/google/failed', (req, res) => {
 });
 
 // Compatibility alias for older mobile clients. It now enforces the same
-// verified Google ID token contract as POST /auth/google.
-router.post('/google/verify', authLimiter, validate({ body: authSchemas.googleSignInBody }), googleSignIn);
+// verified Google ID token contract as POST /auth/google, while also
+// accepting the older `{ email, displayName, googleId }` payload.
+router.post('/google/verify', authLimiter, validate({ body: authSchemas.googleVerifyBody }), googleVerify);
 
 module.exports = router;

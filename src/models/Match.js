@@ -130,6 +130,7 @@ const matchSchema = new mongoose.Schema(
       type: Number,
       required: true,
       default: 0,
+      min: 0,
     },
     customPrize: {
       type: Number,
