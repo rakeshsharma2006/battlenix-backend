@@ -181,7 +181,7 @@ const matchSchemas = {
     status: z.enum(['CANCELLED']).optional(),
   }).strict(),
   statusBody: z.object({
-    status: z.enum(['UPCOMING', 'READY', 'LIVE', 'CANCELLED']),
+    status: z.enum(['UPCOMING', 'READY', 'LIVE', 'COMPLETED', 'CANCELLED']),
   }),
   chatToggleBody: z.object({
     enabled: z.boolean(),

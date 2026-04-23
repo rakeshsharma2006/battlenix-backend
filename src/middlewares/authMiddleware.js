@@ -1,10 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Must match the secret used in tokenService.js signAccessToken()
-const JWT_SECRET =
-  process.env.ACCESS_TOKEN_SECRET ||
-  process.env.JWT_SECRET;
+const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
   throw new Error(
@@ -14,48 +11,57 @@ if (!JWT_SECRET) {
 }
 
 const authMiddleware = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      message: 'Unauthorized: No token provided',
-    });
-  }
-
-  const token = authHeader.split(' ')[1];
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const header = req.headers.authorization;
 
-    // Reject refresh tokens used as access tokens
-    if (decoded.type && decoded.type !== 'access') {
+    if (!header?.startsWith('Bearer ')) {
       return res.status(401).json({
-        message: 'Unauthorized: Invalid token type',
+        message: 'No token provided',
       });
     }
 
-    const userId = decoded._id || decoded.userId;
+    const token = header.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    if (decoded.type && decoded.type !== 'access') {
+      return res.status(401).json({
+        message: 'Invalid token',
+      });
+    }
+
+    const userId = decoded.userId || decoded.id || decoded._id || decoded.sub;
 
     if (!userId) {
       return res.status(401).json({
-        message: 'Unauthorized: Invalid token structure',
+        message: 'Invalid token',
       });
     }
 
-    // Fetch fresh user from DB on every request (catches bans, deletions)
-    const user = await User.findById(userId).select('-password').lean();
+    const user = await User.findById(userId).select('-password');
 
     if (!user) {
       return res.status(401).json({
-        message: 'Unauthorized: User not found',
+        message: 'User not found',
+      });
+    }
+
+    if (user.isBanned) {
+      return res.status(403).json({
+        message: 'Account banned',
       });
     }
 
     req.user = user;
     next();
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        message: 'Token expired',
+      });
+    }
+
     return res.status(401).json({
-      message: 'Unauthorized: Invalid token',
+      message: 'Invalid token',
     });
   }
 };

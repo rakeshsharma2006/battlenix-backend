@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
 const logger = require('../utils/logger');
 const { issueAuthTokens, rotateRefreshToken, signAccessToken } = require('../services/tokenService');
 
@@ -232,6 +233,41 @@ const refresh = async (req, res) => {
   }
 };
 
+const logout = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    const userId = req.user?._id;
+
+    if (typeof refreshToken === 'string' && refreshToken.length > 0) {
+      await RefreshToken.deleteOne({
+        tokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'),
+      });
+    }
+
+    if (userId) {
+      await RefreshToken.deleteMany({
+        userId,
+      });
+
+      logger.info('User logged out', {
+        userId,
+      });
+    }
+
+    return res.status(200).json({
+      message: 'Logged out successfully',
+    });
+  } catch (error) {
+    logger.error('Logout error', {
+      error: error.message,
+    });
+
+    return res.status(200).json({
+      message: 'Logged out',
+    });
+  }
+};
+
 const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
@@ -326,4 +362,4 @@ const googleVerify = async (req, res) => {
   }
 };
 
-module.exports = { register, login, refresh, getMe, googleSignIn, googleVerify };
+module.exports = { register, login, refresh, logout, getMe, googleSignIn, googleVerify };

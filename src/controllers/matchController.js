@@ -390,31 +390,37 @@ const getJoinStatus = async (req, res) => {
       return res.status(404).json({ message: 'Match not found' });
     }
 
-    const payments = await Payment.find({
+    const isInPlayers = match.players.some((player) => (
+      player.toString() === userId.toString()
+    ));
+
+    const payment = await Payment.findOne({
       userId,
       matchId: id,
-      status: { $in: ['SUCCESS', 'PENDING'] },
+      status: 'SUCCESS',
     })
-      .select('status amount createdAt')
+      .select('status createdAt')
       .sort({ createdAt: -1 })
       .lean();
 
-    const userJoinStatus = buildUserJoinStatus({
-      players: match.players,
+    const joined = isInPlayers || payment !== null;
+
+    logger.info('Join status checked', {
       userId,
-      payment: getPreferredPayment(payments),
+      matchId: id,
+      joined,
     });
 
     return res.status(200).json({
-      joined: userJoinStatus.joined,
-      paymentStatus: userJoinStatus.paymentStatus,
-      paymentId: userJoinStatus.paymentId,
-      paidAt: userJoinStatus.paidAt,
+      joined,
+      paymentStatus: payment?.status || null,
+      paymentId: payment?._id || null,
+      paidAt: payment?.createdAt || null,
       matchStatus: match.status,
     });
   } catch (error) {
     logger.error('getJoinStatus error', { error: error.message });
-    return res.status(500).json({ message: 'Failed to check join status' });
+    return res.status(500).json({ message: 'Failed to check status' });
   }
 };
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, refresh, getMe } = require('../controllers/authController');
+const { register, login, refresh, logout, getMe } = require('../controllers/authController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const validate = require('../middlewares/validationMiddleware');
 const { authLimiter } = require('../middlewares/rateLimiters');
@@ -14,14 +14,10 @@ const logger = require('../utils/logger');
 const hashToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
 
-// ─── Existing Auth Routes ───────────────────────────────────────────────────
-
 router.post('/register', authLimiter, validate({ body: authSchemas.registerBody }), register);
 router.post('/login', authLimiter, validate({ body: authSchemas.loginBody }), login);
 router.post('/refresh', authLimiter, validate({ body: authSchemas.refreshBody }), refresh);
 router.get('/me', authMiddleware, getMe);
-
-// ─── Forgot Password ────────────────────────────────────────────────────────
 
 router.post('/forgot-password', authLimiter, async (req, res) => {
   try {
@@ -33,23 +29,16 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
 
     const user = await User.findOne({ email: email.toLowerCase().trim() }).select('_id email').lean();
 
-    // Always return 200 so as not to leak whether the email exists
     if (!user) {
       return res.status(200).json({ message: 'If this email is registered, a reset link has been sent' });
     }
 
-    // Generate a secure random token
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    // Remove any existing reset tokens for this user
     await ResetToken.deleteMany({ userId: user._id });
-
-    // Store hashed token
     await ResetToken.create({ userId: user._id, tokenHash, expiresAt });
-
-    // Send email with raw token
     await sendPasswordResetEmail(user.email, rawToken);
 
     logger.info('Password reset email sent', { userId: user._id });
@@ -60,8 +49,6 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
     return res.status(500).json({ message: 'Failed to send reset email' });
   }
 });
-
-// ─── Reset Password ─────────────────────────────────────────────────────────
 
 router.post('/reset-password', authLimiter, async (req, res) => {
   try {
@@ -91,11 +78,9 @@ router.post('/reset-password', authLimiter, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Update password (pre-save hook will hash it)
     user.password = newPassword;
     await user.save();
 
-    // Invalidate the token
     await ResetToken.deleteOne({ _id: resetToken._id });
 
     logger.info('Password reset successful', { userId: user._id });
@@ -107,30 +92,6 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   }
 });
 
-// ─── Logout — revoke server-side refresh token ────────────────────────────
-// Best-effort: even if the DB update fails, the client clears its tokens.
-// An attacker who extracted the refresh token before logout won't be able to
-// use it after this call sets revokedAt.
-
-router.post('/logout', authMiddleware, async (req, res) => {
-  try {
-    const { refreshToken } = req.body;
-
-    if (refreshToken && typeof refreshToken === 'string') {
-      const RefreshToken = require('../models/RefreshToken');
-      const tokenHash = hashToken(refreshToken);
-      await RefreshToken.updateOne(
-        { tokenHash, revokedAt: null },
-        { $set: { revokedAt: new Date() } }
-      );
-    }
-  } catch (err) {
-    // Non-fatal — log but still confirm logout to the client
-    logger.warn('Logout: failed to revoke refresh token in DB', { error: err.message });
-  }
-
-  return res.status(200).json({ message: 'Logged out successfully' });
-});
+router.post('/logout', authMiddleware, logout);
 
 module.exports = router;
-

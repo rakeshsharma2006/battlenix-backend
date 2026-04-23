@@ -26,11 +26,13 @@ const getStatsPayload = (leaderboardEntry) => ({
 
 const getMyProfile = async (req, res) => {
   try {
+    const userId = req.user._id;
+
     const [user, leaderboardEntry] = await Promise.all([
-      User.findById(req.user._id)
+      User.findById(userId)
         .select('username email role trustScore isFlagged isBanned gameUID gameName upiId createdAt')
         .lean(),
-      Leaderboard.findOne({ userId: req.user._id })
+      Leaderboard.findOne({ userId })
         .select('totalPoints totalWins totalKills totalMatches weeklyPoints monthlyPoints lastMatchAt')
         .lean(),
     ]);
