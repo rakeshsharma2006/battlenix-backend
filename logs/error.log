@@ -122,3 +122,16 @@
 {"error":"Match validation failed: mode: Path `mode` is required., map: Path `map` is required.","level":"error","matchId":"69d228a70c7ab601495e0b7b","message":"setMatchStatus error","service":"battlenix-api","timestamp":"2026-04-19 12:27:58"}
 {"error":"Connection timeout","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 13:25:00"}
 {"error":"read ECONNRESET","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-19 14:12:11"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:47"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:47"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:47"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:47"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:47"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:48"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:49"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:51"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:53"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:55"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:57"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:08:59"}
+{"error":"","level":"error","message":"Redis Client Error","service":"battlenix-api","timestamp":"2026-04-23 20:09:01"}

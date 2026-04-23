@@ -138,9 +138,14 @@ const emitMatchEvent = (eventName, match, options = {}) => {
   });
 };
 
-const getCapacityDrivenStatus = (match) => (
-  Number(match.playersCount) === Number(match.maxPlayers) ? 'READY' : 'UPCOMING'
-);
+const getCapacityDrivenStatus = (match) => {
+  // Preserve an admin-selected READY state even when the room is not full yet.
+  if (match?.status === 'READY') {
+    return 'READY';
+  }
+
+  return Number(match.playersCount) === Number(match.maxPlayers) ? 'READY' : 'UPCOMING';
+};
 
 const syncCapacityDrivenStatus = async (match, options = {}) => {
   if (!match || ['LIVE', 'COMPLETED', 'CANCELLED'].includes(match.status)) {

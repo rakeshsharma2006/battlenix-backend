@@ -4,12 +4,12 @@
  *   get:
  *     summary: Get admin dashboard stats
  *     tags: [Admin]
- *     description: Requires bearer authentication and admin or manager role.
+ *     description: Requires bearer authentication and admin or manager role. Includes backend deployment diagnostics for admin troubleshooting.
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Dashboard stats fetched
+ *         description: Dashboard stats fetched, including backend runtime diagnostics
  *
  * /admin/payments:
  *   get:

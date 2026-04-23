@@ -612,10 +612,6 @@ const setMatchStatus = async (req, res) => {
       return res.status(400).json({ message: 'Match must be UPCOMING to mark as READY' });
     }
     
-    if (status === 'READY' && match.playersCount < 2) {
-      return res.status(400).json({ message: 'Need at least 2 players to start match' });
-    }
-
     if (status === 'UPCOMING' && match.playersCount === match.maxPlayers) {
       return res.status(400).json({ message: 'Full matches must remain READY until they go LIVE or are cancelled' });
     }

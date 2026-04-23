@@ -7,6 +7,7 @@ const { serializeMatch } = require('../services/matchLifecycleService');
 const { getResolvedMatchConfig } = require('../config/prizeConfig');
 const { canBanUsers } = require('../utils/permissions');
 const { cancelMatchAndRefund } = require('../services/matchCancellationService');
+const { getAdminDiagnostics } = require('../utils/runtimeInfo');
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -254,6 +255,7 @@ const getDashboardStats = async (req, res) => {
           paid: paidPayouts,
         },
         recentFlags,
+        diagnostics: getAdminDiagnostics(),
       },
     });
   } catch (error) {
