@@ -94,6 +94,7 @@ const userSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    // Legacy field (keep for backward compat)
     gameUID: {
       type: String,
       default: null,
@@ -105,6 +106,39 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     upiId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+
+    // Per-game fields
+    bgmiUID: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    bgmiName: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    bgmiUpiId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+
+    ffUID: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    ffName: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    ffUpiId: {
       type: String,
       default: null,
       trim: true,

@@ -20,9 +20,27 @@ const {
 } = require('../config/prizeConfig');
 
 const MATCH_POPULATE = [
-  { path: 'players', select: 'username email gameUID gameName upiId trustScore avatar' },
-  { path: 'winner', select: 'username email gameUID gameName upiId trustScore avatar' },
-  { path: 'results.userId', select: 'username email gameUID gameName upiId trustScore avatar' },
+  { 
+    path: 'players', 
+    select: 'username email trustScore avatar ' +
+            'bgmiUID bgmiName bgmiUpiId ' +
+            'ffUID ffName ffUpiId ' +
+            'gameUID gameName upiId' 
+  },
+  { 
+    path: 'winner', 
+    select: 'username email trustScore avatar ' +
+            'bgmiUID bgmiName bgmiUpiId ' +
+            'ffUID ffName ffUpiId ' +
+            'gameUID gameName upiId' 
+  },
+  { 
+    path: 'results.userId', 
+    select: 'username email trustScore avatar ' +
+            'bgmiUID bgmiName bgmiUpiId ' +
+            'ffUID ffName ffUpiId ' +
+            'gameUID gameName upiId' 
+  },
   { path: 'createdBy', select: 'username' },
 ];
 
@@ -81,17 +99,36 @@ const buildMatchPlayers = (match) => {
       slot: (index % teamSize) + 1,
     }));
 
+  const matchGame = match.game; // 'BGMI' or 'FREE_FIRE'
+
   return assignments.map((assignment) => {
     const resolvedUserId = String(assignment.userId?._id || assignment.userId);
     const playerObj = assignment.userId?._id ? assignment.userId : (playerByUserId.get(resolvedUserId) || {});
+
+    // Map correct game fields per player
+    let gameUID, gameName, upiId;
+
+    if (matchGame === 'BGMI') {
+      gameUID = playerObj.bgmiUID || playerObj.gameUID || null;
+      gameName = playerObj.bgmiName || playerObj.gameName || null;
+      upiId = playerObj.bgmiUpiId || playerObj.upiId || null;
+    } else if (matchGame === 'FREE_FIRE') {
+      gameUID = playerObj.ffUID || playerObj.gameUID || null;
+      gameName = playerObj.ffName || playerObj.gameName || null;
+      upiId = playerObj.ffUpiId || playerObj.upiId || null;
+    } else {
+      gameUID = playerObj.gameUID || null;
+      gameName = playerObj.gameName || null;
+      upiId = playerObj.upiId || null;
+    }
 
     return {
       _id: resolvedUserId,
       userId: resolvedUserId,
       username: playerObj.username || null,
-      gameUID: playerObj.gameUID || null,
-      gameName: playerObj.gameName || null,
-      upiId: playerObj.upiId || null,
+      gameUID,
+      gameName,
+      upiId,
       trustScore: playerObj.trustScore !== undefined ? playerObj.trustScore : 100,
       avatar: playerObj.avatar || null,
       email: playerObj.email || null,
@@ -470,8 +507,20 @@ const getMatchRoom = async (req, res) => {
 const getMatchPlayers = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
-      .populate({ path: 'players', select: 'username email gameUID gameName upiId trustScore avatar' })
-      .populate({ path: 'playerAssignments.userId', select: 'username email gameUID gameName upiId trustScore avatar' })
+      .populate({ 
+        path: 'players', 
+        select: 'username email trustScore avatar ' +
+                'bgmiUID bgmiName bgmiUpiId ' +
+                'ffUID ffName ffUpiId ' +
+                'gameUID gameName upiId' 
+      })
+      .populate({ 
+        path: 'playerAssignments.userId', 
+        select: 'username email trustScore avatar ' +
+                'bgmiUID bgmiName bgmiUpiId ' +
+                'ffUID ffName ffUpiId ' +
+                'gameUID gameName upiId' 
+      })
       .select('mode players playerAssignments');
 
     if (!match) {

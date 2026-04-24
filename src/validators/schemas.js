@@ -294,12 +294,23 @@ const playerSchemas = {
   }),
    // playerSchemas mein change karo
   updateProfileBody: z.object({
-  username: z.string().trim().max(30).optional(),
-  // ✅ FIX: gameUid → gameUID (Flutter se match karo)
-  gameUID: z.string().trim().max(50).optional(),
-  gameName: z.string().trim().max(50).optional(),
-  upiId: z.string().trim().min(5).max(100).optional(),
-}).strict(),
+    username: z.string().trim().max(30).optional(),
+    game: z.enum(['BGMI', 'FREE_FIRE']).optional(),
+
+    // Per-game fields
+    bgmiUID: z.string().trim().max(50).optional(),
+    bgmiName: z.string().trim().max(50).optional(),
+    bgmiUpiId: z.string().trim().min(5).max(100).optional(),
+
+    ffUID: z.string().trim().max(50).optional(),
+    ffName: z.string().trim().max(50).optional(),
+    ffUpiId: z.string().trim().min(5).max(100).optional(),
+
+    // Legacy — keep accepting for old app versions
+    gameUID: z.string().trim().max(50).optional(),
+    gameName: z.string().trim().max(50).optional(),
+    upiId: z.string().trim().min(5).max(100).optional(),
+  }).strict(),
   playerIdParams: z.object({
     userId: objectIdSchema,
   }),

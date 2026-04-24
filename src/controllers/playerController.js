@@ -53,11 +53,22 @@ const getMyProfile = async (req, res) => {
         avatar: user.avatar,
         isFlagged: user.isFlagged,
         isBanned: user.isBanned,
-        // ✅ FIX: gameUID (capital) — matches UserModel.fromJson
-        gameUID: user.gameUID || null,
-        gameName: user.gameName || null,
-        upiId: user.upiId || null,
         createdAt: user.createdAt,
+
+        // Per-game profiles
+        bgmiUID: user.bgmiUID || null,
+        bgmiName: user.bgmiName || null,
+        bgmiUpiId: user.bgmiUpiId || null,
+
+        ffUID: user.ffUID || null,
+        ffName: user.ffName || null,
+        ffUpiId: user.ffUpiId || null,
+
+        // Legacy fallback
+        gameUID: user.gameUID || user.bgmiUID || null,
+        gameName: user.gameName || user.bgmiName || null,
+        upiId: user.upiId || user.bgmiUpiId || null,
+
         stats: leaderboardEntry
           ? getStatsPayload(leaderboardEntry)
           : DEFAULT_STATS,
@@ -149,14 +160,33 @@ const getPlayerProfile = async (req, res) => {
 
 const updateMyProfile = async (req, res) => {
   try {
-    // ✅ FIX: gameUid → gameUID everywhere
-    const allowedFields = ['gameUID', 'gameName', 'upiId', 'username'];
-    const updates = {};
+    const allowedFields = [
+      'username',
+      'bgmiUID', 'bgmiName', 'bgmiUpiId',
+      'ffUID', 'ffName', 'ffUpiId',
+      // Legacy
+      'gameUID', 'gameName', 'upiId',
+    ];
 
+    const updates = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         updates[field] = req.body[field]?.trim() || null;
       }
+    }
+
+    // If legacy gameUID sent with game field,
+    // map to correct per-game field
+    if (req.body.game === 'BGMI' && req.body.gameUID) {
+      updates.bgmiUID = req.body.gameUID?.trim() || null;
+      updates.bgmiName = req.body.gameName?.trim() || null;
+      updates.bgmiUpiId = req.body.upiId?.trim() || null;
+    }
+
+    if (req.body.game === 'FREE_FIRE' && req.body.gameUID) {
+      updates.ffUID = req.body.gameUID?.trim() || null;
+      updates.ffName = req.body.gameName?.trim() || null;
+      updates.ffUpiId = req.body.upiId?.trim() || null;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -170,18 +200,16 @@ const updateMyProfile = async (req, res) => {
       { $set: updates },
       { new: true, runValidators: true }
     )
-      // ✅ FIX: select mein gameUID
-      .select('username email gameUID gameName upiId avatar trustScore createdAt role isFlagged isBanned')
-      .lean();
+    .select('username email gameUID gameName upiId ' +
+            'bgmiUID bgmiName bgmiUpiId ' +
+            'ffUID ffName ffUpiId ' +
+            'avatar trustScore createdAt role ' +
+            'isFlagged isBanned')
+    .lean();
 
     if (!updatedUser) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    logger.info('Profile updated', {
-      userId: req.user._id,
-      updatedFields: Object.keys(updates),
-    });
 
     return res.status(200).json({
       success: true,
