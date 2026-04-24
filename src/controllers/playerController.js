@@ -30,8 +30,10 @@ const getMyProfile = async (req, res) => {
 
     const [user, leaderboardEntry] = await Promise.all([
       User.findById(userId)
-        // ✅ FIX: gameUID select
-        .select('username email gameUID gameName upiId avatar trustScore createdAt role isFlagged isBanned')
+        .select('username email gameUID gameName upiId ' +
+                'bgmiUID bgmiName bgmiUpiId ' +
+                'ffUID ffName ffUpiId ' +
+                'avatar trustScore createdAt role isFlagged isBanned')
         .lean(),
       Leaderboard.findOne({ userId })
         .select('totalPoints totalWins totalKills totalMatches weeklyPoints monthlyPoints lastMatchAt')

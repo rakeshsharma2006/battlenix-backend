@@ -521,12 +521,13 @@ const getMatchPlayers = async (req, res) => {
                 'ffUID ffName ffUpiId ' +
                 'gameUID gameName upiId' 
       })
-      .select('mode players playerAssignments');
+      .select('mode game players playerAssignments');
 
     if (!match) {
       return res.status(404).json({ message: 'Match not found' });
     }
 
+    // ✅ FIX: pass match.game so game-aware UID mapping activates
     return res.status(200).json({
       players: buildMatchPlayers(match),
     });

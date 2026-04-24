@@ -1,0 +1,28 @@
+$script = @'
+const mongoose = require('mongoose');
+require('dotenv').config();
+
+mongoose.connect(process.env.MONGO_URI).then(async () => {
+  const db = mongoose.connection.db;
+
+  const user = await db.collection('users')
+    .findOne({ username: 'rafort_walfer_2510' });
+
+  console.log('\n=== USER GAME FIELDS ===');
+  console.log('gameUID  :', user?.gameUID  ?? 'NULL');
+  console.log('bgmiUID  :', user?.bgmiUID  ?? 'NULL');
+  console.log('bgmiName :', user?.bgmiName ?? 'NULL');
+  console.log('ffUID    :', user?.ffUID    ?? 'NULL');
+  console.log('ffName   :', user?.ffName   ?? 'NULL');
+
+  const match = await db.collection('matches')
+    .findOne({ title: 'yughjkl' });
+
+  console.log('\n=== MATCH INFO ===');
+  console.log('game:', match?.game ?? 'NULL');
+
+  mongoose.disconnect();
+});
+'@
+
+$script | Out-File -FilePath "check_user.js" -Encoding UTF8
