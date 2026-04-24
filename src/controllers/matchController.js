@@ -20,9 +20,9 @@ const {
 } = require('../config/prizeConfig');
 
 const MATCH_POPULATE = [
-  { path: 'players', select: 'username' },
-  { path: 'winner', select: 'username' },
-  { path: 'results.userId', select: 'username' },
+  { path: 'players', select: 'username email gameUid gameName upiId trustScore avatar' },
+  { path: 'winner', select: 'username email gameUid gameName upiId trustScore avatar' },
+  { path: 'results.userId', select: 'username email gameUid gameName upiId trustScore avatar' },
   { path: 'createdBy', select: 'username' },
 ];
 
@@ -69,24 +69,32 @@ const buildMatchFilter = (query = {}) => {
 const buildMatchPlayers = (match) => {
   const teamSize = TEAM_SIZE_BY_MODE[match.mode] || 1;
   const players = Array.isArray(match.players) ? match.players : [];
-  const usernameByUserId = new Map(
-    players.map((player) => [String(player._id || player), player.username || null])
+  const playerByUserId = new Map(
+    players.map((player) => [String(player._id || player), player])
   );
 
   const assignments = Array.isArray(match.playerAssignments) && match.playerAssignments.length > 0
     ? match.playerAssignments
     : players.map((player, index) => ({
-      userId: player._id || player,
+      userId: player,
       teamId: Math.floor(index / teamSize) + 1,
       slot: (index % teamSize) + 1,
     }));
 
   return assignments.map((assignment) => {
     const resolvedUserId = String(assignment.userId?._id || assignment.userId);
+    const playerObj = assignment.userId?._id ? assignment.userId : (playerByUserId.get(resolvedUserId) || {});
 
     return {
+      _id: resolvedUserId,
       userId: resolvedUserId,
-      username: assignment.userId?.username || usernameByUserId.get(resolvedUserId) || null,
+      username: playerObj.username || null,
+      gameUid: playerObj.gameUid || null,
+      gameName: playerObj.gameName || null,
+      upiId: playerObj.upiId || null,
+      trustScore: playerObj.trustScore !== undefined ? playerObj.trustScore : 100,
+      avatar: playerObj.avatar || null,
+      email: playerObj.email || null,
       teamId: Number(assignment.teamId) || 1,
       slot: Number(assignment.slot) || 1,
     };
@@ -462,8 +470,8 @@ const getMatchRoom = async (req, res) => {
 const getMatchPlayers = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
-      .populate({ path: 'players', select: 'username' })
-      .populate({ path: 'playerAssignments.userId', select: 'username' })
+      .populate({ path: 'players', select: 'username email gameUid gameName upiId trustScore avatar' })
+      .populate({ path: 'playerAssignments.userId', select: 'username email gameUid gameName upiId trustScore avatar' })
       .select('mode players playerAssignments');
 
     if (!match) {

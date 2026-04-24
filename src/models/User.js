@@ -44,11 +44,12 @@ const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      required: true,
-      unique: true,
+      default: null,
       trim: true,
       minlength: 3,
       maxlength: 30,
+      unique: true,
+      sparse: true,
     },
     email: {
       type: String,
@@ -93,7 +94,7 @@ const userSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
-    gameUID: {
+    gameUid: {
       type: String,
       default: null,
       trim: true,

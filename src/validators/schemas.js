@@ -293,7 +293,8 @@ const playerSchemas = {
     limit: z.coerce.number().int().min(1).max(50).default(20),
   }),
   updateProfileBody: z.object({
-    gameUID: z.string().trim().max(50).optional(),
+    username: z.string().trim().max(30).optional(),
+    gameUid: z.string().trim().max(50).optional(),
     gameName: z.string().trim().max(50).optional(),
     upiId: z.string().trim().min(5).max(100).optional(),
   }).strict(),

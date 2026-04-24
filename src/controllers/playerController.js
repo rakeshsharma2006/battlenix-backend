@@ -30,7 +30,7 @@ const getMyProfile = async (req, res) => {
 
     const [user, leaderboardEntry] = await Promise.all([
       User.findById(userId)
-        .select('username email role trustScore isFlagged isBanned gameUID gameName upiId createdAt')
+        .select('username email gameUid gameName upiId avatar trustScore createdAt role isFlagged isBanned')
         .lean(),
       Leaderboard.findOne({ userId })
         .select('totalPoints totalWins totalKills totalMatches weeklyPoints monthlyPoints lastMatchAt')
@@ -42,15 +42,17 @@ const getMyProfile = async (req, res) => {
     }
 
     return res.status(200).json({
-      profile: {
+      success: true,
+      user: {
         _id: user._id,
         username: user.username,
         email: user.email,
         role: user.role,
         trustScore: user.trustScore,
+        avatar: user.avatar,
         isFlagged: user.isFlagged,
         isBanned: user.isBanned,
-        gameUID: user.gameUID || null,
+        gameUid: user.gameUid || null,
         gameName: user.gameName || null,
         upiId: user.upiId || null,
         createdAt: user.createdAt,
@@ -140,7 +142,7 @@ const getPlayerProfile = async (req, res) => {
 
 const updateMyProfile = async (req, res) => {
   try {
-    const allowedFields = ['gameUID', 'gameName', 'upiId'];
+    const allowedFields = ['gameUid', 'gameName', 'upiId', 'username'];
     const updates = {};
 
     for (const field of allowedFields) {
@@ -155,15 +157,18 @@ const updateMyProfile = async (req, res) => {
       });
     }
 
-    const user = await User.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
-      { new: true }
+      { 
+        new: true,
+        runValidators: true
+      }
     )
-      .select('-password')
+      .select('username email gameUid gameName upiId avatar trustScore createdAt role isFlagged isBanned')
       .lean();
 
-    if (!user) {
+    if (!updatedUser) {
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -173,8 +178,9 @@ const updateMyProfile = async (req, res) => {
     });
 
     return res.status(200).json({
+      success: true,
       message: 'Profile updated successfully',
-      user,
+      user: updatedUser,
     });
   } catch (error) {
     logger.error('updateMyProfile error', { error: error.message });

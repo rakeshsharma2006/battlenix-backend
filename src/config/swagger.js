@@ -45,7 +45,7 @@ const options = {
             trustScore: { type: 'number' },
             isFlagged: { type: 'boolean' },
             isBanned: { type: 'boolean' },
-            gameUID: { type: 'string', nullable: true },
+            gameUid: { type: 'string', nullable: true },
             gameName: { type: 'string', nullable: true },
             upiId: { type: 'string', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },

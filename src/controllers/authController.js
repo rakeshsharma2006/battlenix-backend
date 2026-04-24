@@ -14,7 +14,7 @@ const buildUserPayload = (user) => ({
   email: user.email,
   role: user.role,
   trustScore: user.trustScore ?? undefined,
-  gameUID: user.gameUID ?? null,
+  gameUid: user.gameUid ?? null,
   gameName: user.gameName ?? null,
   upiId: user.upiId ?? null,
 });
@@ -211,7 +211,7 @@ const refresh = async (req, res) => {
     const rotated = await rotateRefreshToken(refreshToken);
 
     const user = await User.findById(rotated.userId)
-      .select('email role username trustScore gameUID gameName upiId')
+      .select('email role username trustScore gameUid gameName upiId')
       .lean();
 
     if (!user) {
