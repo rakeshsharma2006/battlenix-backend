@@ -190,7 +190,7 @@ const listUsers = async (req, res) => {
       page,
       limit,
       query: User.find(filter)
-        .select('username email role trustScore isFlagged isBanned gameUid gameName upiId createdAt updatedAt')
+        .select('username email role trustScore isFlagged isBanned gameUID gameName upiId createdAt updatedAt')
         .sort({ createdAt: -1 }),
     });
 

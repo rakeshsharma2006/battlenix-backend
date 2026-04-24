@@ -292,12 +292,14 @@ const playerSchemas = {
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(20),
   }),
+   // playerSchemas mein change karo
   updateProfileBody: z.object({
-    username: z.string().trim().max(30).optional(),
-    gameUid: z.string().trim().max(50).optional(),
-    gameName: z.string().trim().max(50).optional(),
-    upiId: z.string().trim().min(5).max(100).optional(),
-  }).strict(),
+  username: z.string().trim().max(30).optional(),
+  // ✅ FIX: gameUid → gameUID (Flutter se match karo)
+  gameUID: z.string().trim().max(50).optional(),
+  gameName: z.string().trim().max(50).optional(),
+  upiId: z.string().trim().min(5).max(100).optional(),
+}).strict(),
   playerIdParams: z.object({
     userId: objectIdSchema,
   }),

@@ -30,7 +30,8 @@ const getMyProfile = async (req, res) => {
 
     const [user, leaderboardEntry] = await Promise.all([
       User.findById(userId)
-        .select('username email gameUid gameName upiId avatar trustScore createdAt role isFlagged isBanned')
+        // ✅ FIX: gameUID select
+        .select('username email gameUID gameName upiId avatar trustScore createdAt role isFlagged isBanned')
         .lean(),
       Leaderboard.findOne({ userId })
         .select('totalPoints totalWins totalKills totalMatches weeklyPoints monthlyPoints lastMatchAt')
@@ -43,7 +44,7 @@ const getMyProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      user: {
+      profile: {
         _id: user._id,
         username: user.username,
         email: user.email,
@@ -52,16 +53,22 @@ const getMyProfile = async (req, res) => {
         avatar: user.avatar,
         isFlagged: user.isFlagged,
         isBanned: user.isBanned,
-        gameUid: user.gameUid || null,
+        // ✅ FIX: gameUID (capital) — matches UserModel.fromJson
+        gameUID: user.gameUID || null,
         gameName: user.gameName || null,
         upiId: user.upiId || null,
         createdAt: user.createdAt,
-        stats: leaderboardEntry ? getStatsPayload(leaderboardEntry) : DEFAULT_STATS,
+        stats: leaderboardEntry
+          ? getStatsPayload(leaderboardEntry)
+          : DEFAULT_STATS,
       },
     });
   } catch (error) {
     logger.error('getMyProfile error', { error: error.message });
-    return res.status(500).json({ message: 'Failed to fetch profile', error: error.message });
+    return res.status(500).json({
+      message: 'Failed to fetch profile',
+      error: error.message,
+    });
   }
 };
 
@@ -142,7 +149,8 @@ const getPlayerProfile = async (req, res) => {
 
 const updateMyProfile = async (req, res) => {
   try {
-    const allowedFields = ['gameUid', 'gameName', 'upiId', 'username'];
+    // ✅ FIX: gameUid → gameUID everywhere
+    const allowedFields = ['gameUID', 'gameName', 'upiId', 'username'];
     const updates = {};
 
     for (const field of allowedFields) {
@@ -160,12 +168,10 @@ const updateMyProfile = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
-      { 
-        new: true,
-        runValidators: true
-      }
+      { new: true, runValidators: true }
     )
-      .select('username email gameUid gameName upiId avatar trustScore createdAt role isFlagged isBanned')
+      // ✅ FIX: select mein gameUID
+      .select('username email gameUID gameName upiId avatar trustScore createdAt role isFlagged isBanned')
       .lean();
 
     if (!updatedUser) {

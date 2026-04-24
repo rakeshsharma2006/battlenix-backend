@@ -20,9 +20,9 @@ const {
 } = require('../config/prizeConfig');
 
 const MATCH_POPULATE = [
-  { path: 'players', select: 'username email gameUid gameName upiId trustScore avatar' },
-  { path: 'winner', select: 'username email gameUid gameName upiId trustScore avatar' },
-  { path: 'results.userId', select: 'username email gameUid gameName upiId trustScore avatar' },
+  { path: 'players', select: 'username email gameUID gameName upiId trustScore avatar' },
+  { path: 'winner', select: 'username email gameUID gameName upiId trustScore avatar' },
+  { path: 'results.userId', select: 'username email gameUID gameName upiId trustScore avatar' },
   { path: 'createdBy', select: 'username' },
 ];
 
@@ -89,7 +89,7 @@ const buildMatchPlayers = (match) => {
       _id: resolvedUserId,
       userId: resolvedUserId,
       username: playerObj.username || null,
-      gameUid: playerObj.gameUid || null,
+      gameUID: playerObj.gameUID || null,
       gameName: playerObj.gameName || null,
       upiId: playerObj.upiId || null,
       trustScore: playerObj.trustScore !== undefined ? playerObj.trustScore : 100,
@@ -470,8 +470,8 @@ const getMatchRoom = async (req, res) => {
 const getMatchPlayers = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
-      .populate({ path: 'players', select: 'username email gameUid gameName upiId trustScore avatar' })
-      .populate({ path: 'playerAssignments.userId', select: 'username email gameUid gameName upiId trustScore avatar' })
+      .populate({ path: 'players', select: 'username email gameUID gameName upiId trustScore avatar' })
+      .populate({ path: 'playerAssignments.userId', select: 'username email gameUID gameName upiId trustScore avatar' })
       .select('mode players playerAssignments');
 
     if (!match) {

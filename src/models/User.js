@@ -94,7 +94,7 @@ const userSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
-    gameUid: {
+    gameUID: {
       type: String,
       default: null,
       trim: true,

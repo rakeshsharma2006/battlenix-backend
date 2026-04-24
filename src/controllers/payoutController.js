@@ -32,7 +32,7 @@ const declareWinner = async (req, res) => {
     }
 
     const winner = await User.findById(winnerId)
-      .select('username email upiId gameUid gameName');
+      .select('username email upiId gameUID gameName');
     if (!winner) {
       return res.status(404).json({ message: 'Winner user not found' });
     }
@@ -60,7 +60,7 @@ const declareWinner = async (req, res) => {
           winnerId: winner._id,
           winnerUsername: winner.username,
           winnerUpiId: winner.upiId,
-          winnergameUid: winner.gameUid,
+          winnerGameUID: winner.gameUID,
           winnerGameName: winner.gameName,
           amount: prize,
           matchTitle: match.title,
@@ -103,7 +103,7 @@ const declareWinner = async (req, res) => {
           username: winner.username,
           email: winner.email,
           upiId: winner.upiId,
-          gameUid: winner.gameUid,
+          gameUID: winner.gameUID,
           gameName: winner.gameName,
         },
         prizeAmount: prize,

@@ -35,7 +35,7 @@
  *           schema:
  *             type: object
  *             properties:
- *               gameUid:
+ *               gameUID:
  *                 type: string
  *               gameName:
  *                 type: string
