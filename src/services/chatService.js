@@ -155,19 +155,15 @@ const validateChatAccess = async ({ matchId, requesterId, requesterRole }) => {
     throw new Error('Match not found');
   }
   
-  const hasStarted = match.startTime ? new Date(match.startTime).getTime() <= Date.now() : false;
-  const chatEnabled = match.status === 'COMPLETED';
-
-  if (!chatEnabled) {
-    throw new Error('Chat is only available after match completion');
+  const allowedStatuses = ['READY', 'LIVE', 'COMPLETED'];
+  if (!allowedStatuses.includes(match.status)) {
+    throw new Error('Chat is only available for active or completed matches');
   }
 
   const isAdmin = requesterRole === 'admin' || requesterRole === 'manager';
 
   if (isAdmin) {
-    if (match.createdBy.toString() !== requesterId.toString()) {
-      throw new Error('You can only chat in matches you created');
-    }
+    // Admin can access any match chat
     return { match, isAdmin: true };
   } else {
     const isPlayerInMatch = match.players.map(p => p.toString()).includes(requesterId.toString());

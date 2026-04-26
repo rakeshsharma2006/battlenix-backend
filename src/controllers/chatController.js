@@ -7,6 +7,7 @@ const handleChatError = (error, res) => {
     'Match not found': 404,
     'Chat is only available after match start': 400,
     'Chat is only available after match completion': 400,
+    'Chat is only available for active or completed matches': 400,
     'You can only chat in matches you created': 403,
     'You are not a participant of this match': 403,
     'You can only view your own chat': 403,
@@ -208,16 +209,36 @@ const sendSupportMessage = async (req, res) => {
     
     const lastMsg = chat.messages[chat.messages.length - 1];
 
-    if (req.user.role === 'admin') {
-      emitToUser(targetUserId.toString(), 'new_support_message', {
+    const isAdminSender = req.user.role === 'admin' || req.user.role === 'manager';
+
+    if (isAdminSender) {
+      // Admin replied → notify the user with the event Flutter listens for
+      emitToUser(targetUserId.toString(), 'support_reply', {
         chatId: chat._id,
         senderId: senderId,
+        senderRole: 'ADMIN',
         text: message,
+        message: message,
         createdAt: lastMsg.createdAt,
+        sender: 'ADMIN',
+        user: {
+          _id: senderId.toString(),
+          username: req.user.username || 'Admin',
+        },
       });
     } else {
-      // Send to some admin channel if possible, or just emit to admins
-      // But for now, we just save it.
+      // User sent a support message → notify all connected admins
+      const { getIO } = require('../services/socketService');
+      const io = getIO();
+      if (io) {
+        io.emit('admin_new_support_message', {
+          chatId: chat._id,
+          userId: targetUserId.toString(),
+          senderId: senderId.toString(),
+          text: message,
+          createdAt: lastMsg.createdAt,
+        });
+      }
     }
 
     return res.status(201).json({ message: 'Support message sent', chatMessage: lastMsg });
