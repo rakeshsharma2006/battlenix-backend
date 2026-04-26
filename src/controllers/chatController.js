@@ -269,6 +269,58 @@ const getSupportChatHistory = async (req, res) => {
   }
 };
 
+const replySupportMessage = async (req, res) => {
+  try {
+    const { message } = req.body;
+    const targetUserId = req.params.userId;
+    const senderId = req.user._id;
+
+    if (!message) {
+      return res.status(400).json({ message: 'Message is required' });
+    }
+
+    let chat = await Chat.findOne({
+      chatType: 'SUPPORT',
+      userId: targetUserId
+    });
+
+    if (!chat) {
+      return res.status(404).json({ message: 'Support chat not found' });
+    }
+
+    chat.messages.push({
+      sender: req.user.role === 'admin' || req.user.role === 'manager' ? 'ADMIN' : 'USER',
+      senderId: senderId,
+      text: message,
+      createdAt: new Date(),
+      isRead: false
+    });
+    chat.lastMessageAt = new Date();
+    await chat.save();
+    
+    const lastMsg = chat.messages[chat.messages.length - 1];
+
+    emitToUser(targetUserId.toString(), 'support_reply', {
+      chatId: chat._id,
+      senderId: senderId,
+      senderRole: 'ADMIN',
+      text: message,
+      message: message,
+      createdAt: lastMsg.createdAt,
+      sender: 'ADMIN',
+      user: {
+        _id: senderId.toString(),
+        username: req.user.username || 'Admin',
+      },
+    });
+
+    return res.status(201).json({ message: 'Reply sent', chatMessage: lastMsg });
+  } catch (error) {
+    logger.error('replySupportMessage error', { error: error.message });
+    return res.status(500).json({ message: 'Failed to send reply' });
+  }
+};
+
 module.exports = {
   sendMatchMessage,
   getMatchChatHistory,
@@ -279,4 +331,5 @@ module.exports = {
   getDirectChatHistory,
   sendSupportMessage,
   getSupportChatHistory,
+  replySupportMessage,
 };

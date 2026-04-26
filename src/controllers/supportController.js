@@ -1,5 +1,6 @@
 const SupportTicket = require('../models/SupportTicket');
 const { cloudinary } = require('../config/cloudinary');
+const { emitToUser } = require('../services/socketService');
 const logger = require('../utils/logger');
 
 // ── USER ENDPOINTS ──
@@ -210,6 +211,14 @@ const replyToTicket = async (req, res) => {
       ticketId: id,
       adminId: admin._id,
       newStatus: ticket.status,
+    });
+
+    emitToUser(ticket.userId.toString(), 'support_reply', {
+      ticketId: ticket._id,
+      ticketNumber: ticket.ticketNumber,
+      message,
+      adminUsername: admin.username,
+      createdAt: new Date(),
     });
 
     return res.json({

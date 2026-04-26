@@ -10,6 +10,7 @@ const {
   getDirectChatHistory,
   sendSupportMessage,
   getSupportChatHistory,
+  replySupportMessage,
 } = require('../controllers/chatController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
@@ -37,6 +38,13 @@ router.get(
   '/support',
   authMiddleware,
   getSupportChatHistory
+);
+
+router.post(
+  '/support/:userId/reply',
+  authMiddleware,
+  adminMiddleware,
+  replySupportMessage
 );
 
 router.post(
