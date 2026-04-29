@@ -773,7 +773,7 @@ const exportReferralData = async (req, res) => {
         (user.fraudFlags || []).join('|'),
       ].map((v) => {
         let str = String(v).replace(/"/g, '""');
-        if (/^[=+-\@]/.test(str)) {
+        if (/^[=+\-@]/.test(str)) {
           str = "'" + str;
         }
         return `"${str}"`;
