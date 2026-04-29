@@ -46,6 +46,7 @@ const referralClickSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
       index: true,
+      expires: '30d',
     },
   },
   { timestamps: false }

@@ -213,6 +213,23 @@ const updateMyProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    try {
+      const userUpi = updatedUser.upiId || updatedUser.bgmiUpiId || updatedUser.ffUpiId;
+      if (userUpi) {
+        const duplicateUpi = await User.countDocuments({
+          $or: [{ upiId: userUpi }, { bgmiUpiId: userUpi }, { ffUpiId: userUpi }],
+          _id: { $ne: updatedUser._id },
+        });
+        if (duplicateUpi > 0) {
+          await User.findByIdAndUpdate(updatedUser._id, {
+            $addToSet: { fraudFlags: 'DUPLICATE_UPI' },
+          });
+        }
+      }
+    } catch (fraudErr) {
+      logger.error('Fraud detection failed during profile update (non-fatal)', { error: fraudErr.message });
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Profile updated successfully',

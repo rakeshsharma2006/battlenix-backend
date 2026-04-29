@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const userFlagSchema = new mongoose.Schema(
   {
@@ -158,10 +159,31 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    deviceFingerprint: {
+    hashedDeviceFingerprint: {
       type: String,
       default: null,
       trim: true,
+      select: false,
+    },
+    deviceFingerprintConsent: {
+      type: Boolean,
+      default: false,
+    },
+    deviceFingerprintSetAt: {
+      type: Date,
+      default: null,
+    },
+    signupIp: {
+      type: String,
+      default: null,
+    },
+    cashBalance: {
+      type: Number,
+      default: 0,
+    },
+    coinBalance: {
+      type: Number,
+      default: 0,
     },
     installReferrerRaw: {
       type: String,
@@ -204,10 +226,26 @@ userSchema.virtual('isLocked').get(function () {
 });
 
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  if (this.isModified('password')) {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  }
+
+  // Pre-save hook to handle hashing the virtual device fingerprint if consent is given
+  if (this._deviceFingerprint && this.deviceFingerprintConsent) {
+    this.hashedDeviceFingerprint = crypto.createHash('sha256').update(this._deviceFingerprint).digest('hex');
+    this.deviceFingerprintSetAt = new Date();
+  } else if (this._deviceFingerprint && !this.deviceFingerprintConsent) {
+    // If no consent, do not store it
+    this.hashedDeviceFingerprint = null;
+  }
+  
   next();
+});
+
+// Virtual setter for raw device fingerprint
+userSchema.virtual('deviceFingerprint').set(function (fp) {
+  this._deviceFingerprint = fp;
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {

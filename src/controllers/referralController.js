@@ -55,7 +55,10 @@ const createReferralCode = async (req, res) => {
       notes,
     } = req.body;
 
-    const normalizedCode = code.toUpperCase().trim();
+    if (code === undefined || code === null || typeof code !== 'string') {
+      return res.status(400).json({ message: 'Code is required and must be a string' });
+    }
+    const normalizedCode = String(code).toUpperCase().trim();
 
     const existing = await ReferralCode.findOne({ code: normalizedCode });
     if (existing) {
@@ -223,7 +226,7 @@ const getReferralCodeDetails = async (req, res) => {
     referral.pendingCommission = (referral.totalCommissionEarned || 0) - (referral.totalCommissionPaid || 0);
 
     // Enhanced analytics
-    const totalClicks = await ReferralClick.countDocuments({ code: referral.code });
+    const totalClicks = await ReferralClick.countDocuments({ referralCodeId: referral._id });
     const totalSignups = referral.totalSignups || 0;
     const totalFirstMatches = referral.totalFirstMatches || 0;
     const totalRevenue = referral.totalRevenue || 0;
@@ -340,55 +343,62 @@ const markCommissionPaid = async (req, res) => {
     const { id } = req.params;
     const { amount, method, transactionRef, notes } = req.body;
 
-    const referral = await ReferralCode.findById(id);
-    if (!referral) {
-      return res.status(404).json({ message: 'Referral code not found' });
-    }
+    const referral = await ReferralCode.findOneAndUpdate(
+      { 
+        _id: id, 
+        $expr: { $gte: [{ $subtract: ["$totalCommissionEarned", "$totalCommissionPaid"] }, amount] }
+      },
+      { $inc: { totalCommissionPaid: amount } },
+      { new: true }
+    );
 
-    const pendingCommission = (referral.totalCommissionEarned || 0) - (referral.totalCommissionPaid || 0);
-    if (amount > pendingCommission) {
+    if (!referral) {
+      const existing = await ReferralCode.findById(id);
+      if (!existing) return res.status(404).json({ message: 'Referral code not found' });
+      const pendingCommission = (existing.totalCommissionEarned || 0) - (existing.totalCommissionPaid || 0);
       return res.status(400).json({
         message: `Payout amount (${amount}) exceeds pending commission (${pendingCommission.toFixed(2)})`,
       });
     }
 
-    const payout = await CreatorPayout.create({
-      referralCodeId: referral._id,
-      code: referral.code,
-      creatorName: referral.creatorName,
-      amount,
-      method: method || 'UPI',
-      transactionRef: transactionRef || null,
-      notes: notes || null,
-      paidBy: req.user._id,
-    });
+    try {
+      const payout = await CreatorPayout.create({
+        referralCodeId: referral._id,
+        code: referral.code,
+        creatorName: referral.creatorName,
+        amount,
+        method: method || 'UPI',
+        transactionRef: transactionRef || null,
+        notes: notes || null,
+        paidBy: req.user._id,
+      });
 
-    // Atomic increment on totalCommissionPaid
-    await ReferralCode.findByIdAndUpdate(id, {
-      $inc: { totalCommissionPaid: amount },
-    });
+      logger.info('payout_recorded', {
+        code: referral.code,
+        amount,
+        method: payout.method,
+        paidBy: req.user._id,
+      });
 
-    logger.info('payout_recorded', {
-      code: referral.code,
-      amount,
-      method: payout.method,
-      paidBy: req.user._id,
-    });
+      ReferralActivityLog.create({
+        referralCodeId: referral._id,
+        code: referral.code,
+        event: 'PAYOUT_MARKED_PAID',
+        actorId: req.user._id,
+        metadata: { amount, method: payout.method, transactionRef },
+      }).catch((err) => {
+        logger.error('Failed to log PAYOUT_MARKED_PAID activity', { error: err.message });
+      });
 
-    ReferralActivityLog.create({
-      referralCodeId: referral._id,
-      code: referral.code,
-      event: 'PAYOUT_MARKED_PAID',
-      actorId: req.user._id,
-      metadata: { amount, method: payout.method, transactionRef },
-    }).catch((err) => {
-      logger.error('Failed to log PAYOUT_MARKED_PAID activity', { error: err.message });
-    });
-
-    return res.status(201).json({
-      message: 'Payout recorded successfully',
-      payout,
-    });
+      return res.status(201).json({
+        message: 'Payout recorded successfully',
+        payout,
+      });
+    } catch (createErr) {
+      // rollback
+      await ReferralCode.findByIdAndUpdate(id, { $inc: { totalCommissionPaid: -amount } });
+      throw createErr;
+    }
   } catch (error) {
     logger.error('markCommissionPaid error', { error: error.message });
     return res.status(500).json({ message: 'Failed to record payout', error: error.message });
@@ -477,6 +487,19 @@ const trackReferralClick = async (req, res) => {
       return res.redirect(302, safeUrl);
     }
 
+    const hasConsent = req.headers.cookie?.includes('consent_analytics=true') || req.query.consent === 'true';
+    if (!hasConsent) {
+      logger.info('Skipping referral click tracking due to lack of consent', { code });
+      // Still increment totalClicks
+      ReferralCode.findByIdAndUpdate(referral._id, {
+        $inc: { totalClicks: 1 },
+      }).catch((err) => {
+        logger.error('Failed to increment totalClicks', { code, error: err.message });
+      });
+
+      return res.redirect(302, safeUrl);
+    }
+
     // Parse user agent
     const ua = new UAParser(req.headers['user-agent'] || '');
     const uaResult = ua.getResult();
@@ -485,11 +508,22 @@ const trackReferralClick = async (req, res) => {
     const ip = getClientIp(req);
     const geo = ip ? geoip.lookup(ip) : null;
 
+    let anonymizedIp = null;
+    if (ip) {
+      if (ip.includes('.')) {
+        anonymizedIp = ip.split('.').slice(0, 3).join('.') + '.0';
+      } else if (ip.includes(':')) {
+        anonymizedIp = ip.split(':').slice(0, 4).join(':') + '::';
+      } else {
+        anonymizedIp = ip;
+      }
+    }
+
     // Save click record (fire-and-forget for performance)
     ReferralClick.create({
       referralCodeId: referral._id,
       code: referral.code,
-      ip: ip || null,
+      ip: anonymizedIp,
       country: geo?.country || null,
       city: geo?.city || null,
       deviceType: uaResult.device?.type || 'desktop',
@@ -562,13 +596,17 @@ const processReferralCommission = async ({ userId, entryFee, paymentId, matchId 
 
     // Track first match
     if (isFirstMatch) {
-      await User.findByIdAndUpdate(userId, {
-        $set: { firstMatchPlayedAt: new Date() },
-      });
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: userId, firstMatchPlayedAt: null },
+        { $set: { firstMatchPlayedAt: new Date() } },
+        { new: false }
+      );
 
-      await ReferralCode.findByIdAndUpdate(referral._id, {
-        $inc: { totalFirstMatches: 1 },
-      });
+      if (updatedUser) {
+        await ReferralCode.findByIdAndUpdate(referral._id, {
+          $inc: { totalFirstMatches: 1 },
+        });
+      }
     }
 
     // Calculate commission
@@ -643,9 +681,18 @@ const processReferralCommission = async ({ userId, entryFee, paymentId, matchId 
     if (isFirstMatch && !user.isReferralRewardGiven) {
       const hasReward = (referral.rewardCashToUser || 0) > 0 || (referral.rewardCoinsToUser || 0) > 0;
       if (hasReward) {
-        await User.findByIdAndUpdate(userId, {
+        const updateDoc = {
           $set: { isReferralRewardGiven: true },
-        });
+        };
+        const cashInc = referral.rewardCashToUser || 0;
+        const coinInc = referral.rewardCoinsToUser || 0;
+        if (cashInc > 0 || coinInc > 0) {
+          updateDoc.$inc = {};
+          if (cashInc > 0) updateDoc.$inc.cashBalance = cashInc;
+          if (coinInc > 0) updateDoc.$inc.coinBalance = coinInc;
+        }
+        
+        await User.findByIdAndUpdate(userId, updateDoc);
 
         logger.info('Referral reward granted to user', {
           userId,
@@ -724,7 +771,13 @@ const exportReferralData = async (req, res) => {
         match.revenue || 0,
         commission.commissionGenerated || 0,
         (user.fraudFlags || []).join('|'),
-      ].map((v) => `"${v}"`).join(',');
+      ].map((v) => {
+        let str = String(v).replace(/"/g, '""');
+        if (/^[=+-\@]/.test(str)) {
+          str = "'" + str;
+        }
+        return `"${str}"`;
+      }).join(',');
     });
 
     const csv = [headers, ...rows].join('\n');

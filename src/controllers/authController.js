@@ -136,7 +136,11 @@ const findOrCreateGoogleUser = async ({
 
 const register = async (req, res) => {
   try {
-    const { username, email, password, referralCode, deviceFingerprint, installReferrerRaw } = req.body;
+    const { username, email, password, referralCode, deviceFingerprint, installReferrerRaw, deviceFingerprintConsent } = req.body;
+
+    const clientIp = req.headers['x-forwarded-for']
+      ? req.headers['x-forwarded-for'].split(',')[0].trim()
+      : req.connection?.remoteAddress || req.ip || null;
 
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
@@ -177,7 +181,7 @@ const register = async (req, res) => {
     }
 
     // Create user with referral fields
-    const userPayload = { username, email, password };
+    const userPayload = { username, email, password, signupIp: clientIp };
     if (referralDoc) {
       userPayload.referralCode = referralDoc.code;
       userPayload.referralCodeId = referralDoc._id;
@@ -185,6 +189,7 @@ const register = async (req, res) => {
     }
     if (deviceFingerprint) {
       userPayload.deviceFingerprint = deviceFingerprint;
+      userPayload.deviceFingerprintConsent = deviceFingerprintConsent === true;
     }
     if (installReferrerRaw) {
       userPayload.installReferrerRaw = installReferrerRaw;
@@ -213,9 +218,10 @@ const register = async (req, res) => {
       const fraudFlags = [];
 
       // Check duplicate device fingerprint
-      if (deviceFingerprint) {
+      if (deviceFingerprint && deviceFingerprintConsent) {
+        const hashedFp = crypto.createHash('sha256').update(deviceFingerprint).digest('hex');
         const duplicateDeviceCount = await User.countDocuments({
-          deviceFingerprint,
+          hashedDeviceFingerprint: hashedFp,
           _id: { $ne: user._id },
         });
         if (duplicateDeviceCount >= 2) {
@@ -223,24 +229,10 @@ const register = async (req, res) => {
         }
       }
 
-      // Check duplicate UPI across any UPI field
-      const userUpi = user.upiId || user.bgmiUpiId || user.ffUpiId;
-      if (userUpi) {
-        const duplicateUpi = await User.countDocuments({
-          $or: [{ upiId: userUpi }, { bgmiUpiId: userUpi }, { ffUpiId: userUpi }],
-          _id: { $ne: user._id },
-        });
-        if (duplicateUpi > 0) {
-          fraudFlags.push('DUPLICATE_UPI');
-        }
-      }
-
       // MULTIPLE_SIGNUPS_SAME_IP check
-      const clientIp = req.headers['x-forwarded-for']
-        ? req.headers['x-forwarded-for'].split(',')[0].trim()
-        : req.connection?.remoteAddress || req.ip || null;
       if (clientIp) {
         const recentSignupsFromIp = await User.countDocuments({
+          signupIp: clientIp,
           createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
           _id: { $ne: user._id },
         });
