@@ -143,6 +143,45 @@ const userSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    // ── Referral fields ──────────────────────────────────────────────────
+    referralCode: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    referralCodeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ReferralCode',
+      default: null,
+    },
+    referredAt: {
+      type: Date,
+      default: null,
+    },
+    deviceFingerprint: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    installReferrerRaw: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    isReferralRewardGiven: {
+      type: Boolean,
+      default: false,
+    },
+    firstMatchPlayedAt: {
+      type: Date,
+      default: null,
+    },
+    fraudFlags: {
+      type: [String],
+      default: [],
+    },
+    // ── End referral fields ──────────────────────────────────────────────
+
     flags: {
       type: [userFlagSchema],
       default: [],
@@ -180,5 +219,7 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 // above — these calls simply assign a name and ensure they won't be skipped.
 userSchema.index({ email: 1 }, { unique: true, name: 'email_unique' });
 userSchema.index({ username: 1 }, { unique: true, name: 'username_unique' });
+userSchema.index({ referralCodeId: 1 }, { name: 'user_referral_code' });
+userSchema.index({ referredAt: 1 }, { name: 'user_referred_at' });
 
 module.exports = mongoose.model('User', userSchema);

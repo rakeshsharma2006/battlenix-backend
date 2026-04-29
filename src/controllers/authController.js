@@ -136,14 +136,155 @@ const findOrCreateGoogleUser = async ({
 
 const register = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, referralCode, deviceFingerprint, installReferrerRaw } = req.body;
 
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email or username already exists' });
     }
 
-    const user = await User.create({ username, email, password });
+    // ── Referral attribution (errors must NEVER block signup) ──────────
+    let resolvedCode = null;
+    let referralDoc = null;
+
+    try {
+      // Priority 1: explicit referral code
+      if (referralCode) {
+        resolvedCode = referralCode.toUpperCase().trim();
+      }
+      // Priority 2: extract from Play Store installReferrer (format: ref_CODE)
+      else if (installReferrerRaw) {
+        const match = installReferrerRaw.match(/ref_([A-Z0-9_]+)/i);
+        if (match) {
+          resolvedCode = match[1].toUpperCase().trim();
+        }
+      }
+
+      if (resolvedCode) {
+        const ReferralCode = require('../models/ReferralCode');
+        const found = await ReferralCode.findOne({ code: resolvedCode, isActive: true });
+        if (found && (!found.expiresAt || new Date(found.expiresAt) >= new Date())) {
+          referralDoc = found;
+        } else {
+          logger.warn('Invalid/expired referral code during registration', { code: resolvedCode });
+          resolvedCode = null;
+        }
+      }
+    } catch (refErr) {
+      logger.error('Referral code lookup failed during registration (non-fatal)', { error: refErr.message });
+      resolvedCode = null;
+      referralDoc = null;
+    }
+
+    // Create user with referral fields
+    const userPayload = { username, email, password };
+    if (referralDoc) {
+      userPayload.referralCode = referralDoc.code;
+      userPayload.referralCodeId = referralDoc._id;
+      userPayload.referredAt = new Date();
+    }
+    if (deviceFingerprint) {
+      userPayload.deviceFingerprint = deviceFingerprint;
+    }
+    if (installReferrerRaw) {
+      userPayload.installReferrerRaw = installReferrerRaw;
+    }
+
+    const user = await User.create(userPayload);
+
+    // ── Post-creation referral tasks (fire-and-forget) ────────────────
+    if (referralDoc) {
+      const ReferralCode = require('../models/ReferralCode');
+      ReferralCode.findByIdAndUpdate(referralDoc._id, {
+        $inc: { totalSignups: 1 },
+      }).catch((err) => {
+        logger.error('Failed to increment totalSignups', { code: referralDoc.code, error: err.message });
+      });
+
+      logger.info('Signup attributed to referral', {
+        userId: user._id,
+        code: referralDoc.code,
+        creatorName: referralDoc.creatorName,
+      });
+    }
+
+    // ── Fraud detection (fire-and-forget) ─────────────────────────────
+    try {
+      const fraudFlags = [];
+
+      // Check duplicate device fingerprint
+      if (deviceFingerprint) {
+        const duplicateDeviceCount = await User.countDocuments({
+          deviceFingerprint,
+          _id: { $ne: user._id },
+        });
+        if (duplicateDeviceCount >= 2) {
+          fraudFlags.push('DUPLICATE_DEVICE');
+        }
+      }
+
+      // Check duplicate UPI across any UPI field
+      const userUpi = user.upiId || user.bgmiUpiId || user.ffUpiId;
+      if (userUpi) {
+        const duplicateUpi = await User.countDocuments({
+          $or: [{ upiId: userUpi }, { bgmiUpiId: userUpi }, { ffUpiId: userUpi }],
+          _id: { $ne: user._id },
+        });
+        if (duplicateUpi > 0) {
+          fraudFlags.push('DUPLICATE_UPI');
+        }
+      }
+
+      // MULTIPLE_SIGNUPS_SAME_IP check
+      const clientIp = req.headers['x-forwarded-for']
+        ? req.headers['x-forwarded-for'].split(',')[0].trim()
+        : req.connection?.remoteAddress || req.ip || null;
+      if (clientIp) {
+        const recentSignupsFromIp = await User.countDocuments({
+          createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+          _id: { $ne: user._id },
+        });
+        if (recentSignupsFromIp >= 5) {
+          fraudFlags.push('MULTIPLE_SIGNUPS_SAME_IP');
+        }
+      }
+
+      // DISPOSABLE_EMAIL check
+      const disposableDomains = [
+        'mailinator.com', 'tempmail.com', 'guerrillamail.com',
+        'throwam.com', 'sharklasers.com', 'yopmail.com',
+        'trashmail.com', '10minutemail.com', 'fakeinbox.com',
+      ];
+      const emailDomain = email.split('@')[1]?.toLowerCase();
+      if (disposableDomains.includes(emailDomain)) {
+        fraudFlags.push('DISPOSABLE_EMAIL_PATTERN');
+      }
+
+      // FAST_REPEAT_SIGNUP check (many signups via same referral code quickly)
+      if (referralDoc) {
+        const fastRepeat = await User.countDocuments({
+          referralCodeId: referralDoc._id,
+          createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) },
+          _id: { $ne: user._id },
+        });
+        if (fastRepeat >= 3) {
+          fraudFlags.push('FAST_REPEAT_SIGNUP');
+        }
+      }
+
+      if (fraudFlags.length > 0) {
+        await User.findByIdAndUpdate(user._id, {
+          $addToSet: { fraudFlags: { $each: fraudFlags } },
+        });
+        logger.warn('fraud_flagged', {
+          userId: user._id,
+          code: referralDoc?.code || null,
+          fraudFlags,
+        });
+      }
+    } catch (fraudErr) {
+      logger.error('Fraud detection failed during registration (non-fatal)', { error: fraudErr.message });
+    }
 
     return res.status(201).json(
       await buildAuthResponse(user, 'User registered successfully')

@@ -13,6 +13,7 @@ const adminRoutes = require('./adminRoutes');
 const leaderboardRoutes = require('./leaderboardRoutes');
 const chatRoutes = require('./chatRoutes');
 const supportRoutes = require('./supportRoutes');
+const referralRoutes = require('./referralRoutes');
 
 router.get('/', sampleController.getWelcomeMessage);
 router.get('/health', sampleController.getHealth);
@@ -30,5 +31,6 @@ router.use('/admin', adminRoutes);
 router.use('/leaderboard', leaderboardRoutes);
 router.use('/chat', chatRoutes);
 router.use('/support', supportRoutes);
+router.use('/', referralRoutes);
 
 module.exports = router;

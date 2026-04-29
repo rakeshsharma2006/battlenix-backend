@@ -35,7 +35,10 @@ const authSchemas = {
     username: z.string().trim().min(3).max(30),
     email: z.string().trim().email(),
     password: z.string().min(6).max(128),
-  }).strict(),
+    referralCode: z.string().trim().max(20).optional(),
+    deviceFingerprint: z.string().trim().max(200).optional(),
+    installReferrerRaw: z.string().trim().max(500).optional(),
+  }),
   loginBody: z.object({
     email: z.string().trim().email(),
     password: z.string().min(6).max(128),
@@ -358,6 +361,55 @@ const chatSchemas = {
   }),
 };
 
+const referralCodePattern = /^[A-Z0-9_]{3,20}$/;
+
+const referralSchemas = {
+  createReferralBody: z.object({
+    code: z.string().trim().min(3).max(20)
+      .transform((v) => v.toUpperCase())
+      .refine((v) => referralCodePattern.test(v), {
+        message: 'Code must be 3-20 uppercase letters, numbers, or underscores',
+      }),
+    creatorName: z.string().trim().min(1).max(100),
+    channelName: z.string().trim().max(100).optional(),
+    platform: z.enum(['YOUTUBE', 'INSTAGRAM', 'TELEGRAM', 'DISCORD', 'OTHER']).optional(),
+    channelUrl: z.string().trim().url().optional().or(z.literal('')),
+    commissionModel: z.enum(['PER_FIRST_MATCH', 'PERCENT_REVENUE', 'HYBRID']).optional(),
+    commissionPerUser: z.coerce.number().min(0).optional(),
+    commissionPercent: z.coerce.number().min(0).max(50).optional(),
+    rewardCoinsToUser: z.coerce.number().min(0).optional(),
+    rewardCashToUser: z.coerce.number().min(0).optional(),
+    expiresAt: z.string().datetime({ offset: true }).optional().or(z.literal('')),
+    notes: z.string().trim().max(500).optional(),
+  }),
+  updateReferralBody: z.object({
+    creatorName: z.string().trim().min(1).max(100).optional(),
+    channelName: z.string().trim().max(100).optional(),
+    platform: z.enum(['YOUTUBE', 'INSTAGRAM', 'TELEGRAM', 'DISCORD', 'OTHER']).optional(),
+    channelUrl: z.string().trim().url().optional().or(z.literal('')),
+    commissionModel: z.enum(['PER_FIRST_MATCH', 'PERCENT_REVENUE', 'HYBRID']).optional(),
+    commissionPerUser: z.coerce.number().min(0).optional(),
+    commissionPercent: z.coerce.number().min(0).max(50).optional(),
+    rewardCoinsToUser: z.coerce.number().min(0).optional(),
+    rewardCashToUser: z.coerce.number().min(0).optional(),
+    expiresAt: z.string().datetime({ offset: true }).optional().or(z.literal('')).or(z.null()),
+    notes: z.string().trim().max(500).optional(),
+  }),
+  markPaidBody: z.object({
+    amount: z.coerce.number().min(0.01, 'Amount must be greater than 0'),
+    method: z.enum(['UPI', 'BANK', 'CASH']).optional(),
+    transactionRef: z.string().trim().max(200).optional(),
+    notes: z.string().trim().max(500).optional(),
+  }),
+  listQuery: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  }),
+  referralIdParams: z.object({
+    id: objectIdSchema,
+  }),
+};
+
 module.exports = {
   authSchemas,
   paymentSchemas,
@@ -369,4 +421,5 @@ module.exports = {
   walletSchemas,
   withdrawSchemas,
   chatSchemas,
+  referralSchemas,
 };

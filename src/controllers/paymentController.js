@@ -842,6 +842,28 @@ const settleCapturedPayment = async ({
       maxPlayers: settlement.match.maxPlayers,
       matchStatus: settlement.match.status,
     });
+
+    // ── Referral commission (fire-and-forget, never blocks payment) ──
+    if (settlement.payment.amount > 0) {
+      try {
+        const { processReferralCommission } = require('./referralController');
+        processReferralCommission({
+          userId: settlement.payment.userId,
+          entryFee: settlement.payment.amount,
+          paymentId: settlement.payment._id,
+          matchId: settlement.payment.matchId || null,
+        }).catch((err) => {
+          logger.error('Referral commission processing failed (non-fatal)', {
+            userId: settlement.payment.userId,
+            error: err.message,
+          });
+        });
+      } catch (refErr) {
+        logger.error('Referral commission import/call failed (non-fatal)', {
+          error: refErr.message,
+        });
+      }
+    }
   }
 
   return settlement;
