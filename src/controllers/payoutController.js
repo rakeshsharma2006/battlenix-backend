@@ -4,6 +4,43 @@ const PayoutLog = require('../models/PayoutLog');
 const logger = require('../utils/logger');
 const { emitToUser } = require('../services/socketService');
 
+const cleanString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const resolveWinnerPayoutProfile = (winner, game) => {
+  const normalizedGame = cleanString(game).toUpperCase().replace(/\s+/g, '_');
+
+  if (normalizedGame === 'BGMI') {
+    return {
+      upiId: cleanString(winner.bgmiUpiId) || cleanString(winner.upiId),
+      gameUID: cleanString(winner.bgmiUID) || cleanString(winner.gameUID),
+      gameName: cleanString(winner.bgmiName) || cleanString(winner.gameName),
+    };
+  }
+
+  if (normalizedGame === 'FREE_FIRE' || normalizedGame === 'FREEFIRE') {
+    return {
+      upiId: cleanString(winner.ffUpiId) || cleanString(winner.upiId),
+      gameUID: cleanString(winner.ffUID) || cleanString(winner.gameUID),
+      gameName: cleanString(winner.ffName) || cleanString(winner.gameName),
+    };
+  }
+
+  return {
+    upiId:
+      cleanString(winner.upiId) ||
+      cleanString(winner.bgmiUpiId) ||
+      cleanString(winner.ffUpiId),
+    gameUID:
+      cleanString(winner.gameUID) ||
+      cleanString(winner.bgmiUID) ||
+      cleanString(winner.ffUID),
+    gameName:
+      cleanString(winner.gameName) ||
+      cleanString(winner.bgmiName) ||
+      cleanString(winner.ffName),
+  };
+};
+
 // POST /admin/matches/:id/declare-winner
 const declareWinner = async (req, res) => {
   try {
@@ -32,12 +69,14 @@ const declareWinner = async (req, res) => {
     }
 
     const winner = await User.findById(winnerId)
-      .select('username email upiId gameUID gameName');
+      .select('username email upiId gameUID gameName bgmiUID bgmiName bgmiUpiId ffUID ffName ffUpiId');
     if (!winner) {
       return res.status(404).json({ message: 'Winner user not found' });
     }
 
-    if (!winner.upiId) {
+    const winnerProfile = resolveWinnerPayoutProfile(winner, match.game);
+
+    if (!winnerProfile.upiId) {
       return res.status(400).json({
         message: 'Winner has not set their UPI ID in profile. Cannot process payout.',
       });
@@ -46,7 +85,7 @@ const declareWinner = async (req, res) => {
     const prize = prizeAmount ?? match.prizeBreakdown?.playerPrize ?? 0;
 
     match.declaredWinnerId = winnerId;
-    match.winnerUpiId = winner.upiId;
+    match.winnerUpiId = winnerProfile.upiId;
     match.prizeAmount = prize;
     match.paymentStatus = 'PENDING';
     if (!match.winner) match.winner = winnerId;
@@ -59,9 +98,9 @@ const declareWinner = async (req, res) => {
           matchId: match._id,
           winnerId: winner._id,
           winnerUsername: winner.username,
-          winnerUpiId: winner.upiId,
-          winnerGameUID: winner.gameUID,
-          winnerGameName: winner.gameName,
+          winnerUpiId: winnerProfile.upiId,
+          winnerGameUID: winnerProfile.gameUID || null,
+          winnerGameName: winnerProfile.gameName || null,
           amount: prize,
           matchTitle: match.title,
           matchMap: match.map,
@@ -102,9 +141,9 @@ const declareWinner = async (req, res) => {
           _id: winner._id,
           username: winner.username,
           email: winner.email,
-          upiId: winner.upiId,
-          gameUID: winner.gameUID,
-          gameName: winner.gameName,
+          upiId: winnerProfile.upiId,
+          gameUID: winnerProfile.gameUID || null,
+          gameName: winnerProfile.gameName || null,
         },
         prizeAmount: prize,
         paymentStatus: 'PENDING',
