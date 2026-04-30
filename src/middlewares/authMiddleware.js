@@ -1,14 +1,6 @@
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-
-const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error(
-    '[authMiddleware] ACCESS_TOKEN_SECRET environment variable is not set. ' +
-    'Set it in your .env file before starting the server.'
-  );
-}
+const { verifyAccessToken } = require('../services/tokenService');
+const logger = require('../utils/logger');
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -21,13 +13,7 @@ const authMiddleware = async (req, res, next) => {
     }
 
     const token = header.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    if (decoded.type && decoded.type !== 'access') {
-      return res.status(401).json({
-        message: 'Invalid token',
-      });
-    }
+    const decoded = verifyAccessToken(token);
 
     const userId = decoded.userId || decoded.id || decoded._id || decoded.sub;
 
@@ -54,6 +40,13 @@ const authMiddleware = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
+    logger.warn('JWT verification failed', {
+      error: error.message,
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+    });
+
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         message: 'Token expired',

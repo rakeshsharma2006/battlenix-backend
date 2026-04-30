@@ -1,37 +1,56 @@
 const rateLimit = require('express-rate-limit');
+const logger = require('../utils/logger');
 
-const buildLimiter = ({ windowMs, max, message, skip }) => rateLimit({
-  windowMs,
-  max,
+const logRateLimitHit = (name) => (req, res, next, options) => {
+  logger.warn('Rate limit hit', {
+    limiter: name,
+    ip: req.ip,
+    path: req.path,
+    method: req.method,
+    userId: req.user?._id,
+  });
+
+  return res.status(options.statusCode).json(options.message);
+};
+
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 300,                   // 300 req per IP
   standardHeaders: true,
   legacyHeaders: false,
-  skip,
-  message: { message },
+  message: {
+    message: 'Too many requests. Please slow down.'
+  },
+  handler: logRateLimitHit('global'),
+  skip: (req) => {
+    // Skip rate limit for webhook
+    return req.path === '/payment/webhook';
+  },
 });
 
-const globalLimiter = buildLimiter({
-  windowMs: 60 * 1000,
-  max: 300,
-  message: 'Too many requests. Please retry shortly.',
-  skip: (req) => req.path === '/health' || req.path === '/payment/webhook',
-});
-
-const authLimiter = buildLimiter({
+// Auth routes — stricter
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 25,
-  message: 'Too many authentication attempts. Please retry later.',
+  max: 20,
+  message: { message: 'Too many login attempts.' },
+  handler: logRateLimitHit('auth'),
 });
 
-const paymentLimiter = buildLimiter({
-  windowMs: 10 * 60 * 1000,
-  max: 60,
-  message: 'Too many payment requests. Please retry later.',
+// Payment routes — stricter
+const paymentLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 15,
+  message: { message: 'Too many payment requests.' },
+  handler: logRateLimitHit('payment'),
 });
 
-const adminLimiter = buildLimiter({
+const adminLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 120,
-  message: 'Too many admin requests. Please retry later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many admin requests. Please retry later.' },
+  handler: logRateLimitHit('admin'),
 });
 
 module.exports = {

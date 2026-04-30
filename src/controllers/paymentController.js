@@ -4,8 +4,10 @@ const Payment = require('../models/Payment');
 const Match = require('../models/Match');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const cache = require('../utils/cache');
 
 let razorpayClient = null;
+const invalidateMatchListCache = () => cache.deleteByPrefix('matches:');
 
 const getRazorpayClient = () => {
   if (razorpayClient) {
@@ -833,6 +835,7 @@ const settleCapturedPayment = async ({
   }
 
   if (settlement.kind === 'SUCCESS') {
+    invalidateMatchListCache();
     logger.info(`${source}: Payment settled and user joined match`, {
       paymentId: settlement.payment._id,
       orderId: settlement.payment.razorpay_order_id,
@@ -989,6 +992,7 @@ const createOrder = async (req, res) => {
           matchStatus: updatedMatch.status,
         });
 
+        invalidateMatchListCache();
         return res.status(200).json({
           message: 'Joined free match!',
           already_joined: false,
@@ -1280,6 +1284,13 @@ const verifyPayment = async (req, res) => {
         .digest('hex');
 
       if (expectedSignature !== razorpay_signature) {
+        logger.warn('Payment signature mismatch', {
+          paymentId: payment._id,
+          userId: req.user?._id,
+          razorpay_order_id,
+          razorpay_payment_id,
+          ip: req.ip,
+        });
         return res.status(400).json({ message: 'Invalid payment signature' });
       }
 

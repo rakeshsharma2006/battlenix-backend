@@ -14,7 +14,11 @@ const handleWebhook = async (req, res) => {
     const signature = req.headers['x-razorpay-signature'];
 
     if (!signature || !webhookSecret) {
-      logger.warn('Webhook rejected because signature or webhook secret is missing');
+      logger.warn('Webhook rejected because signature or webhook secret is missing', {
+        hasSignature: Boolean(signature),
+        hasWebhookSecret: Boolean(webhookSecret),
+        ip: req.ip,
+      });
       return res.status(400).json({ message: 'Missing signature' });
     }
 
@@ -24,7 +28,9 @@ const handleWebhook = async (req, res) => {
       .digest('hex');
 
     if (expectedSignature !== signature) {
-      logger.warn('Webhook rejected because signature verification failed');
+      logger.warn('Webhook rejected because signature verification failed', {
+        ip: req.ip,
+      });
       return res.status(400).json({ message: 'Invalid webhook signature' });
     }
 
@@ -233,7 +239,6 @@ const handleWebhook = async (req, res) => {
 };
 
 module.exports = { handleWebhook };
-
 
 
 

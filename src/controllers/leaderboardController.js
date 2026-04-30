@@ -5,6 +5,18 @@ const {
 } = require('../services/leaderboardService');
 const Leaderboard = require('../models/Leaderboard');
 const redisClient = require('../config/redis');
+const cache = require('../utils/cache');
+
+const buildStableCacheKey = (prefix, query = {}) => {
+  const normalized = Object.keys(query)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = query[key];
+      return acc;
+    }, {});
+
+  return `${prefix}:${JSON.stringify(normalized)}`;
+};
 
 const listLeaderboard = (scope) => async (req, res) => {
   try {
@@ -21,7 +33,14 @@ const listLeaderboard = (scope) => async (req, res) => {
 
 const getPublicLeaderboard = async (req, res) => {
   try {
+    const cacheKey = buildStableCacheKey('leaderboard:public', req.query);
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     const data = await getPublicLeaderboardPage(req.query);
+    cache.set(cacheKey, data, 300);
     return res.status(200).json(data);
   } catch (error) {
     logger.error('getPublicLeaderboard error', {

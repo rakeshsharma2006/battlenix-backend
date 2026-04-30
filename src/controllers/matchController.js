@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Match = require('../models/Match');
 const Payment = require('../models/Payment');
 const logger = require('../utils/logger');
+const cache = require('../utils/cache');
 const { emitToUser } = require('../services/socketService');
 const { cancelMatchAndRefund } = require('../services/matchCancellationService');
 const {
@@ -59,6 +60,19 @@ const normalizeResultEntry = (entry) => ({
 });
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const invalidateMatchListCache = () => cache.deleteByPrefix('matches:');
+
+const buildStableCacheKey = (prefix, query = {}) => {
+  const normalized = Object.keys(query)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = query[key];
+      return acc;
+    }, {});
+
+  return `${prefix}:${JSON.stringify(normalized)}`;
+};
 
 const buildMatchFilter = (query = {}) => {
   const filter = {};
@@ -319,6 +333,7 @@ const createMatch = async (req, res) => {
       actorId: req.user._id,
     });
 
+    invalidateMatchListCache();
     emitMatchUpdated(match, { includeSensitive: true });
     return res.status(201).json({ message: 'Match created', match: serializeMatch(match, { includeSensitive: true }) });
   } catch (error) {
@@ -332,15 +347,24 @@ const listMatches = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
+    const userId = req.user?._id || null;
+    const cacheKey = userId ? null : buildStableCacheKey('matches', req.query);
+
+    if (cacheKey) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        return res.status(200).json(cached);
+      }
+    }
 
     const matches = await Match.find(buildMatchFilter(req.query))
+      .select('title game map mode prizeBreakdown winnerTeam paymentStatus declaredWinnerId winnerUpiId prizeAmount paidBy paidAt slotType slotCode isAutoCreated entryType entryFee customPrize chatEnabled maxPlayers playersCount players playerAssignments status startTime liveAt roomId roomPassword isRoomPublished results winner createdBy createdAt updatedAt')
       .populate(MATCH_POPULATE)
       .sort({ startTime: 1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
-    const userId = req.user?._id || null;
     const paymentByMatchId = new Map();
 
     if (userId && matches.length > 0) {
@@ -376,11 +400,17 @@ const listMatches = async (req, res) => {
       };
     });
 
-    return res.status(200).json({
+    const result = {
       matches: matchesWithStatus,
       page,
       limit,
-    });
+    };
+
+    if (cacheKey) {
+      cache.set(cacheKey, result, 30);
+    }
+
+    return res.status(200).json(result);
   } catch (error) {
     logger.error('listMatches error', { error: error.message });
     return res.status(500).json({ message: 'Failed to fetch matches', error: error.message });
@@ -627,6 +657,7 @@ const updateMatch = async (req, res) => {
         actorId: req.user._id,
       });
 
+      invalidateMatchListCache();
       return res.status(200).json({
         message: 'Match updated',
         match: serializeMatch(cancelled.match, { includeSensitive: true }),
@@ -641,6 +672,7 @@ const updateMatch = async (req, res) => {
       status: match.status,
     });
 
+    invalidateMatchListCache();
     emitMatchChange(match, previousStatus, { includeSensitive: true });
     return res.status(200).json({ message: 'Match updated', match: serializeMatch(match, { includeSensitive: true }) });
   } catch (error) {
@@ -686,6 +718,7 @@ const setMatchStatus = async (req, res) => {
         includeSensitive: true,
       });
 
+      invalidateMatchListCache();
       return res.status(200).json({
         message: 'Match status updated',
         match: serializeMatch(cancelled.match, { includeSensitive: true }),
@@ -701,6 +734,7 @@ const setMatchStatus = async (req, res) => {
 
     await match.save();
 
+    invalidateMatchListCache();
     emitMatchChange(match, previousStatus, { includeSensitive: true });
 
     return res.status(200).json({
@@ -754,6 +788,7 @@ const deleteMatch = async (req, res) => {
       deletedBy: req.user._id,
     });
 
+    invalidateMatchListCache();
     return res.status(200).json({
       message: 'Match deleted successfully',
     });
@@ -801,6 +836,7 @@ const publishRoom = async (req, res) => {
       playerCount: match.players.length,
     });
 
+    invalidateMatchListCache();
     return res.status(200).json({
       message: 'Room published and match moved to LIVE',
       match: serializeMatch(match, { includeSensitive: true }),
@@ -875,6 +911,7 @@ const submitResult = async (req, res) => {
     }
 
     const populatedMatch = await Match.findById(completedMatch._id).populate(MATCH_POPULATE);
+    invalidateMatchListCache();
     return res.status(200).json({
       message: 'Match results submitted successfully',
       match: serializeMatch(populatedMatch, { includeSensitive: true }),
@@ -905,6 +942,7 @@ const toggleChat = async (req, res) => {
       message: enabled ? 'Chat has been enabled' : 'Chat has been disabled by admin'
     });
     
+    invalidateMatchListCache();
     return res.status(200).json({
       message: enabled ? 'Chat enabled' : 'Chat disabled',
       chatEnabled: match.chatEnabled,
@@ -960,6 +998,7 @@ const joinFreeMatch = async (req, res) => {
 
     await match.save();
 
+    invalidateMatchListCache();
     return res.status(200).json({
       message: 'Successfully joined match!',
       match: {

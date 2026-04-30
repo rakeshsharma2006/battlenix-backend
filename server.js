@@ -1,5 +1,6 @@
 require('dotenv').config();
 const http = require('http');
+const mongoose = require('mongoose');
 const app = require('./app');
 const connectDB = require('./src/config/db');
 const logger = require('./src/utils/logger');
@@ -21,12 +22,14 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
+let server;
+
 connectDB()
   .then(() => {
-    const httpServer = http.createServer(app);
-    initializeSocket(httpServer);
+    server = http.createServer(app);
+    initializeSocket(server);
 
-    httpServer.listen(PORT, () => {
+    server.listen(PORT, () => {
       logger.info('Server is running', { port: PORT });
       startPaymentCleanupJob();
       startMatchLifecycleJob();
@@ -37,3 +40,32 @@ connectDB()
     logger.error('Failed to connect to database', { error: err.message });
     process.exit(1);
   });
+
+// ─── Graceful Shutdown ─────────────────────────────────────────────────────
+const shutdown = async (signal) => {
+  logger.info(`${signal} received — shutting down gracefully`);
+
+  if (server) {
+    server.close(async () => {
+      logger.info('HTTP server closed');
+
+      if (mongoose.connection.readyState === 1) {
+        await mongoose.connection.close();
+        logger.info('MongoDB connection closed');
+      }
+
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
+
+  // Force shutdown after 10s
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));

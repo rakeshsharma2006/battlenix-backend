@@ -3,8 +3,22 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const RefreshToken = require('../models/RefreshToken');
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET || 'battlenix_jwt_secret_change_in_prod';
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || `${ACCESS_TOKEN_SECRET}_refresh`;
+const getTokenSecret = (name, fallback) => {
+  const secret = process.env[name] || fallback;
+  if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 32)) {
+    throw new Error(`${name} must be set to a 32+ character value in production`);
+  }
+  return secret;
+};
+
+const ACCESS_TOKEN_SECRET = getTokenSecret(
+  'ACCESS_TOKEN_SECRET',
+  process.env.JWT_SECRET || 'battlenix_jwt_secret_change_in_prod'
+);
+const REFRESH_TOKEN_SECRET = getTokenSecret(
+  'REFRESH_TOKEN_SECRET',
+  `${ACCESS_TOKEN_SECRET}_refresh`
+);
 const ACCESS_TOKEN_EXPIRES_IN = '15m';
 const REFRESH_TOKEN_EXPIRES_IN = '7d';
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -22,7 +36,7 @@ const buildAccessTokenPayload = (user) => ({
 const signAccessToken = (user) => jwt.sign(
   buildAccessTokenPayload(user),
   ACCESS_TOKEN_SECRET,
-  { expiresIn: ACCESS_TOKEN_EXPIRES_IN }
+  { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_EXPIRES_IN }
 );
 
 const signRefreshToken = ({ userId, tokenId }) => jwt.sign(
@@ -32,7 +46,7 @@ const signRefreshToken = ({ userId, tokenId }) => jwt.sign(
     type: 'refresh',
   },
   REFRESH_TOKEN_SECRET,
-  { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
+  { algorithm: 'HS256', expiresIn: REFRESH_TOKEN_EXPIRES_IN }
 );
 
 const persistRefreshToken = async ({ userId, refreshToken, tokenId, familyExpiresAt, session }) => RefreshToken.create([{
@@ -61,15 +75,19 @@ const issueAuthTokens = async (user) => {
 };
 
 const verifyAccessToken = (token) => {
-  const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
-  if (decoded.type && decoded.type !== 'access') {
+  const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET, {
+    algorithms: ['HS256'],
+  });
+  if (decoded.type !== 'access') {
     throw new Error('Invalid access token type');
   }
   return decoded;
 };
 
 const verifyRefreshToken = (token) => {
-  const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET);
+  const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET, {
+    algorithms: ['HS256'],
+  });
   if (decoded.type !== 'refresh') {
     throw new Error('Invalid refresh token type');
   }

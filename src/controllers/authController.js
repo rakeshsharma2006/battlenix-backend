@@ -29,6 +29,12 @@ const buildAuthResponse = async (user, message) => {
   };
 };
 
+const hashForLog = (value = '') => crypto
+  .createHash('sha256')
+  .update(String(value).toLowerCase().trim())
+  .digest('hex')
+  .slice(0, 16);
+
 const buildGoogleAuthResponse = async (user, message = 'Google sign-in successful') => {
   const tokens = await issueAuthTokens(user);
 
@@ -293,11 +299,21 @@ const login = async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
+      logger.warn('Failed login attempt', {
+        reason: 'user_not_found',
+        emailHash: hashForLog(email),
+        ip: req.ip,
+      });
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     if (user.isLocked) {
       const waitMinutes = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      logger.warn('Failed login attempt on locked account', {
+        userId: user._id,
+        loginAttempts: user.loginAttempts,
+        ip: req.ip,
+      });
       return res.status(401).json({
         message: `Account is temporarily locked. Try again in ${waitMinutes} minutes.`,
       });
@@ -310,11 +326,22 @@ const login = async (req, res) => {
       if (user.loginAttempts >= 4) {
         user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
         await user.save();
+        logger.warn('Failed login threshold reached; account locked', {
+          userId: user._id,
+          loginAttempts: user.loginAttempts,
+          ip: req.ip,
+        });
         return res.status(401).json({
           message: 'Too many failed attempts. Account locked for 15 minutes.',
         });
       }
       await user.save();
+      logger.warn('Failed login attempt', {
+        reason: 'bad_password',
+        userId: user._id,
+        loginAttempts: user.loginAttempts,
+        ip: req.ip,
+      });
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 

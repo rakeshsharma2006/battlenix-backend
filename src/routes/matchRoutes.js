@@ -1,6 +1,7 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { verifyAccessToken } = require('../services/tokenService');
+const logger = require('../utils/logger');
 const router = express.Router();
 const {
   createMatch,
@@ -22,8 +23,6 @@ const adminMiddleware = require('../middlewares/adminMiddleware');
 const validate = require('../middlewares/validationMiddleware');
 const { matchSchemas } = require('../validators/schemas');
 
-const JWT_SECRET = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET;
-
 const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -32,13 +31,9 @@ const optionalAuth = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = verifyAccessToken(token);
 
-    if (decoded.type && decoded.type !== 'access') {
-      return next();
-    }
-
-    const userId = decoded._id || decoded.userId || decoded.id;
+    const userId = decoded._id || decoded.userId || decoded.id || decoded.sub;
     if (!userId) {
       return next();
     }
@@ -47,8 +42,13 @@ const optionalAuth = async (req, res, next) => {
     if (user) {
       req.user = user;
     }
-  } catch (_error) {
+  } catch (error) {
     // Ignore auth errors for optional auth routes.
+    logger.warn('Optional match auth token rejected', {
+      error: error.message,
+      path: req.path,
+      ip: req.ip,
+    });
   }
 
   next();
@@ -75,4 +75,3 @@ router.post('/:id/publish-room', authMiddleware, adminMiddleware, validate({ par
 router.post('/:id/result', authMiddleware, adminMiddleware, validate({ params: matchSchemas.matchIdParams, body: matchSchemas.submitResultBody }), submitResult);
 
 module.exports = router;
-

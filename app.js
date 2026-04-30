@@ -1,49 +1,94 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
+const mongoSanitize = require('mongo-sanitize');
+const hpp = require('hpp');
 const routes = require('./src/routes');
 const passport = require('./src/config/passport');
-const { globalLimiter } = require('./src/middlewares/rateLimiters');
+const { globalLimiter, authLimiter, paymentLimiter } = require('./src/middlewares/rateLimiters');
 const logger = require('./src/utils/logger');
 
 const app = express();
 const REQUEST_TIMEOUT_MS = 30000;
+const JSON_BODY_LIMIT = '10kb';
+const WEBHOOK_BODY_LIMIT = '1mb';
 const haltOnTimedout = (req, res, next) => {
   if (req.timedout) {
     return;
   }
-
   next();
 };
 
 app.set('trust proxy', 1);
-app.use(helmet());
-app.use(compression());
 
-// ─── CORS ──────────────────────────────────────────────────────────────────
-// Production: only the explicit FRONTEND_ORIGIN env var is allowed.
-// Development: common LAN and localhost ranges are allowed.
-let allowedOrigins;
-if (process.env.NODE_ENV === 'production') {
-  const prodOrigin = process.env.FRONTEND_ORIGIN;
-  if (!prodOrigin) {
-    logger.warn(
-      '[CORS] FRONTEND_ORIGIN is not set in production — all origins will be BLOCKED. ' +
-      'Set FRONTEND_ORIGIN=https://yourdomain.com in your environment.'
-    );
-  }
-  allowedOrigins = prodOrigin ? [prodOrigin] : [];
-} else {
-  allowedOrigins = [
-    /^http:\/\/localhost:\d+$/,
-    /^http:\/\/127\.0\.0\.1:\d+$/,
-    /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
-    /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/,
-  ];
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS || ''
+).split(',').map(o => o.trim()).filter(Boolean);
+if (process.env.FRONTEND_ORIGIN && !allowedOrigins.includes(process.env.FRONTEND_ORIGIN)) {
+  allowedOrigins.push(process.env.FRONTEND_ORIGIN);
 }
 
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", ...allowedOrigins],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+}));
+
+app.use(compression({
+  filter: (req, res) => {
+    // Don't compress SSE or webhook
+    if (req.path === '/payment/webhook') return false;
+    return compression.filter(req, res);
+  },
+  level: 6,
+}));
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow mobile apps (no origin) and listed origins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      logger.warn('CORS request rejected', { origin });
+      callback(new Error('CORS blocked: ' + origin));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
+}));
+
+app.use((req, res, next) => {
+  const contentLength = Number(req.headers['content-length'] || 0);
+  const limit = req.path === '/payment/webhook' ? 1024 * 1024 : 10 * 1024;
+
+  if (contentLength > limit) {
+    logger.warn('Unusual payload size rejected by configured body limit', {
+      path: req.path,
+      method: req.method,
+      contentLength,
+      limit,
+      ip: req.ip,
+    });
+  }
+
+  next();
+});
+
 app.use((req, res, next) => {
   req.timedout = false;
   req.timeoutController = new AbortController();
@@ -83,66 +128,130 @@ app.use((req, res, next) => {
 });
 app.use(haltOnTimedout);
 
-app.use('/payment/webhook', express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  },
+// Webhook needs raw body — keep separate:
+app.use('/payment/webhook', express.raw({ type: 'application/json', limit: WEBHOOK_BODY_LIMIT }), (req, res, next) => {
+  if (Buffer.isBuffer(req.body)) {
+    req.rawBody = req.body.toString('utf8');
+    try {
+      req.body = JSON.parse(req.rawBody);
+    } catch (error) {
+      logger.warn('Invalid webhook JSON payload', {
+        error: error.message,
+        path: req.path,
+      });
+      return res.status(400).json({ message: 'Invalid webhook payload' });
+    }
+  }
+  next();
+});
+app.use(haltOnTimedout);
+
+// JSON body limit (prevents large payload attacks)
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(haltOnTimedout);
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+app.use(haltOnTimedout);
+
+// Remove $ and . from user input (NoSQL injection)
+app.use((req, res, next) => {
+  req.body = mongoSanitize(req.body);
+  req.query = mongoSanitize(req.query);
+  next();
+});
+
+// Prevent HTTP parameter pollution
+app.use(hpp({
+  whitelist: ['status', 'game', 'mode'],
 }));
 app.use(haltOnTimedout);
 
-app.use((req, res, next) => {
-  if (req.path.startsWith('/support')) {
-    return next();
-  }
-  // OPTIMIZATION 2: Tightened from 100kb — 10kb is ample for all API payloads.
-  // Webhook stays on raw body (handled above).
-  express.json({ limit: '10kb' })(req, res, next);
-});
-app.use(haltOnTimedout);
-app.use((req, res, next) => {
-  if (req.path.startsWith('/support')) {
-    return next();
-  }
-  express.urlencoded({ extended: true, limit: '10kb' })(req, res, next);
-});
-app.use(haltOnTimedout);
 app.use(passport.initialize());
 app.use(haltOnTimedout);
+
 app.use(globalLimiter);
+app.use('/auth/login', authLimiter);
+app.use('/auth/register', authLimiter);
+app.use('/payment/create-order', paymentLimiter);
+app.use('/payment/verify', paymentLimiter);
 app.use(haltOnTimedout);
+
+// Health Check Endpoint
+app.get('/health', (req, res) => {
+  const mongoState = mongoose.connection.readyState;
+  const states = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+  };
+
+  res.status(mongoState === 1 ? 200 : 503).json({
+    status: mongoState === 1 ? 'ok' : 'degraded',
+    mongo: states[mongoState],
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+  });
+});
 
 app.use('/', haltOnTimedout, routes);
 
-app.use((req, res, next) => {
-  if (req.timedout) {
-    return;
-  }
-
+// 404 handler
+app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+// Global error handler
 app.use((err, req, res, next) => {
-  if (req.timedout) {
-    return;
+  const isDev = process.env.NODE_ENV === 'development';
+
+  if (err.message?.startsWith('CORS blocked:')) {
+    logger.warn('CORS rejection handled', {
+      message: err.message,
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+    });
+    return res.status(403).json({ message: 'CORS blocked' });
   }
 
-  logger.error('Unhandled error', {
+  if (err.type === 'entity.too.large') {
+    logger.warn('Request payload too large', {
+      path: req.path,
+      method: req.method,
+      limit: err.limit,
+      length: err.length,
+      ip: req.ip,
+    });
+    return res.status(413).json({ message: 'Payload too large' });
+  }
+
+  logger.error('Unhandled server error', {
     message: err.message,
-    stack: err.stack,
+    stack: isDev ? err.stack : undefined,
     path: req.path,
     method: req.method,
+    userId: req.user?._id,
   });
 
-  // OPTIMIZATION 2: Surface Razorpay misconfiguration as 503
+  // Handle specific known errors
   if (err.code === 'RAZORPAY_NOT_CONFIGURED') {
     return res.status(503).json({
-      message: 'Payment service is temporarily unavailable. Please try again later.',
+      message: 'Payment service temporarily unavailable'
     });
   }
 
-  res.status(500).json({
-    message: 'Internal Server Error',
-    ...(process.env.NODE_ENV !== 'production' ? { error: err.message } : {}),
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ message: err.message });
+  }
+
+  if (err.name === 'CastError') {
+    return res.status(400).json({ message: 'Invalid ID format' });
+  }
+
+  // Never expose stack in production
+  res.status(err.status || 500).json({
+    message: isDev ? err.message : 'Internal server error',
   });
 });
 

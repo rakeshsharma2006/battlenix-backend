@@ -14,8 +14,8 @@ const logger = require('../utils/logger');
 const hashToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
 
-router.post('/register', authLimiter, validate({ body: authSchemas.registerBody }), register);
-router.post('/login', authLimiter, validate({ body: authSchemas.loginBody }), login);
+router.post('/register', validate({ body: authSchemas.registerBody }), register);
+router.post('/login', validate({ body: authSchemas.loginBody }), login);
 router.post('/refresh', authLimiter, validate({ body: authSchemas.refreshBody }), refresh);
 router.get('/me', authMiddleware, getMe);
 

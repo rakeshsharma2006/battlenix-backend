@@ -4,6 +4,7 @@ const MatchResult = require('../models/MatchResult');
 const User = require('../models/User');
 const JobLock = require('../models/JobLock');
 const logger = require('../utils/logger');
+const cache = require('../utils/cache');
 const { emitEvent } = require('./socketService');
 const redisClient = require('../config/redis');
 
@@ -193,6 +194,7 @@ const applyMatchResultsToLeaderboard = async ({
       ordered: false,
     });
     logger.info('Match results applied to leaderboard', { matchId, usersCount: userIds.length });
+    cache.deleteByPrefix('leaderboard:');
 
     if (redisClient.isReady) {
       try {
@@ -302,7 +304,7 @@ const getLeaderboardPage = async (scope, query) => {
 
   if (isTop100 && redisClient.isReady) {
     try {
-      await redisClient.setEx(cacheKey, 30, JSON.stringify(result));
+      await redisClient.setEx(cacheKey, 300, JSON.stringify(result));
     } catch (err) {
       logger.error('Redis cache set error', { err: err.message, cacheKey });
     }
