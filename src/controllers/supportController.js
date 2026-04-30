@@ -3,6 +3,25 @@ const { cloudinary } = require('../config/cloudinary');
 const { emitToUser } = require('../services/socketService');
 const logger = require('../utils/logger');
 
+const formatTicket = (ticket) => {
+  const plain = typeof ticket.toObject === 'function' ? ticket.toObject() : ticket;
+  return {
+    ...plain,
+    screenshotUrls: (plain.screenshots || []).map((screenshot) => screenshot.url).filter(Boolean),
+  };
+};
+
+const parseDeviceInfo = (deviceInfo) => {
+  if (!deviceInfo) return {};
+  if (typeof deviceInfo === 'object') return deviceInfo;
+
+  try {
+    return JSON.parse(deviceInfo);
+  } catch {
+    return {};
+  }
+};
+
 // ── USER ENDPOINTS ──
 
 // Create new ticket
@@ -37,7 +56,7 @@ const createTicket = async (req, res) => {
       screenshots,
       relatedMatchId: relatedMatchId || null,
       relatedPaymentId: relatedPaymentId || null,
-      deviceInfo: deviceInfo ? JSON.parse(deviceInfo) : {},
+      deviceInfo: parseDeviceInfo(deviceInfo),
     });
 
     logger.info('Support ticket created', {
@@ -49,13 +68,7 @@ const createTicket = async (req, res) => {
 
     return res.status(201).json({
       message: 'Ticket submitted successfully',
-      ticket: {
-        _id: ticket._id,
-        ticketNumber: ticket.ticketNumber,
-        status: ticket.status,
-        priority: ticket.priority,
-        createdAt: ticket.createdAt,
-      },
+      ticket: formatTicket(ticket),
     });
   } catch (error) {
     logger.error('createTicket error', {
@@ -83,7 +96,7 @@ const getUserTickets = async (req, res) => {
     const total = await SupportTicket.countDocuments({ userId });
 
     return res.json({
-      tickets,
+      tickets: tickets.map(formatTicket),
       total,
       page: Number(page),
       pages: Math.ceil(total / limit),
@@ -112,7 +125,7 @@ const getTicketById = async (req, res) => {
       });
     }
 
-    return res.json({ ticket });
+    return res.json({ ticket: formatTicket(ticket) });
   } catch (error) {
     return res.status(500).json({
       message: 'Failed to fetch ticket',
@@ -156,7 +169,7 @@ const getAllTickets = async (req, res) => {
     ]);
 
     return res.json({
-      tickets,
+      tickets: tickets.map(formatTicket),
       total,
       page: Number(page),
       pages: Math.ceil(total / limit),
@@ -227,6 +240,7 @@ const replyToTicket = async (req, res) => {
         _id: ticket._id,
         status: ticket.status,
         replies: ticket.replies,
+        screenshotUrls: (ticket.screenshots || []).map((screenshot) => screenshot.url).filter(Boolean),
       },
     });
   } catch (error) {
@@ -266,7 +280,7 @@ const updateTicket = async (req, res) => {
 
     return res.json({
       message: 'Ticket updated',
-      ticket,
+      ticket: formatTicket(ticket),
     });
   } catch (error) {
     return res.status(500).json({

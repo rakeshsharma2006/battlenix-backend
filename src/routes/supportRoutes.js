@@ -13,11 +13,23 @@ const {
   getTicketStats,
 } = require('../controllers/supportController');
 
+const handleScreenshotUpload = (req, res, next) => {
+  uploadScreenshot.array('screenshots', 3)(req, res, (error) => {
+    if (error) {
+      return res.status(400).json({
+        message: error.message || 'Screenshot upload failed',
+      });
+    }
+
+    next();
+  });
+};
+
 // ── USER ROUTES ──
 router.post(
   '/',
   authMiddleware,
-  uploadScreenshot.array('screenshots', 3),
+  handleScreenshotUpload,
   createTicket
 );
 

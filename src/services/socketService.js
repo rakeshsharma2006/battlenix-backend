@@ -61,6 +61,44 @@ const initializeSocket = (httpServer) => {
       logger.info('Socket joined verified user room', { socketId: socket.id, userId });
     });
 
+    socket.on('join_match_room', (data) => {
+      const matchId = data?.matchId?.toString();
+      if (!matchId) return;
+
+      socket.join(`match:${matchId}`);
+      logger.info('Socket joined match room', { socketId: socket.id, userId, matchId });
+    });
+
+    socket.on('leave_match_room', (data) => {
+      const matchId = data?.matchId?.toString();
+      if (!matchId) return;
+
+      socket.leave(`match:${matchId}`);
+      logger.info('Socket left match room', { socketId: socket.id, userId, matchId });
+    });
+
+    socket.on('send_message', async (data) => {
+      try {
+        const matchId = data?.matchId?.toString();
+        const text = data?.message?.toString()?.trim();
+        if (!matchId || !text) return;
+
+        const { sendMatchMessage } = require('./chatService');
+        await sendMatchMessage({
+          matchId,
+          senderId: socket.data.user._id,
+          senderUsername: socket.data.user.username,
+          text,
+        });
+      } catch (error) {
+        logger.error('Socket send_message error', {
+          error: error.message,
+          userId,
+        });
+        socket.emit('message_error', { message: error.message || 'Failed to send message' });
+      }
+    });
+
     // ── Support message via socket (from user) ──────────────────────────────
     socket.on('support_message', async (data) => {
       try {

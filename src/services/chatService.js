@@ -281,7 +281,7 @@ const getMatchChats = async ({ matchId, requesterId, requesterRole }) => {
     throw new Error('Match not found');
   }
 
-  if (match.createdBy.toString() !== requesterId.toString()) {
+  if (requesterRole !== 'admin' && match.createdBy.toString() !== requesterId.toString()) {
     throw new Error('You can only view chats for matches you created');
   }
 

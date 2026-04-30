@@ -81,7 +81,30 @@ const chatSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-chatSchema.index({ matchId: 1, userId: 1 }, { unique: true });
+chatSchema.index(
+  { chatType: 1, matchId: 1, userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { chatType: 'ROOM' },
+    name: 'room_chat_unique',
+  }
+);
+chatSchema.index(
+  { chatType: 1, userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { chatType: 'SUPPORT' },
+    name: 'support_chat_unique',
+  }
+);
+chatSchema.index(
+  { chatType: 1, userId: 1, receiverId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { chatType: 'DIRECT' },
+    name: 'direct_chat_unique',
+  }
+);
 chatSchema.index({ matchId: 1, matchCreatedBy: 1 });
 chatSchema.index({ userId: 1, lastMessageAt: -1 });
 

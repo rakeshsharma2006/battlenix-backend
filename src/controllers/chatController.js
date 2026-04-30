@@ -134,12 +134,20 @@ const sendDirectMessage = async (req, res) => {
 
     const lastMsg = chat.messages[chat.messages.length - 1];
 
-    emitToUser(targetUserId.toString(), 'new_direct_message', {
+    const directPayload = {
       chatId: chat._id,
       senderId: senderId,
       text: message,
+      message,
       createdAt: lastMsg.createdAt,
-    });
+      user: {
+        _id: senderId.toString(),
+        username: req.user.username || 'User',
+      },
+    };
+
+    emitToUser(targetUserId.toString(), 'new_direct_message', directPayload);
+    emitToUser(targetUserId.toString(), 'direct_message', directPayload);
 
     return res.status(201).json({ message: 'Message sent', chatMessage: lastMsg });
   } catch (error) {
@@ -227,6 +235,20 @@ const sendSupportMessage = async (req, res) => {
         },
       });
     } else {
+      emitToUser(senderId.toString(), 'support_message_sent', {
+        chatId: chat._id,
+        senderId: senderId.toString(),
+        senderRole: 'USER',
+        text: message,
+        message,
+        createdAt: lastMsg.createdAt,
+        sender: 'USER',
+        user: {
+          _id: senderId.toString(),
+          username: req.user.username || 'User',
+        },
+      });
+
       // User sent a support message → notify all connected admins
       const { getIO } = require('../services/socketService');
       const io = getIO();
@@ -251,9 +273,10 @@ const sendSupportMessage = async (req, res) => {
 const getSupportChatHistory = async (req, res) => {
   try {
     const targetUserId = req.query.userId || req.user._id;
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'manager';
     
     // Non-admins can only see their own support history
-    if (req.user.role !== 'admin' && targetUserId.toString() !== req.user._id.toString()) {
+    if (!isAdmin && targetUserId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -265,6 +288,77 @@ const getSupportChatHistory = async (req, res) => {
     return res.status(200).json({ chat: chat || { messages: [] } });
   } catch (error) {
     logger.error('getSupportChatHistory error', { error: error.message });
+    return res.status(500).json({ message: 'Failed to get support chat' });
+  }
+};
+
+const getSupportConversations = async (req, res) => {
+  try {
+    const chats = await Chat.find({ chatType: 'SUPPORT' })
+      .populate('userId', 'username email')
+      .sort({ lastMessageAt: -1 })
+      .lean();
+
+    const conversations = chats.map((chat) => {
+      const messages = Array.isArray(chat.messages) ? chat.messages : [];
+      const lastMessage = messages[messages.length - 1] || null;
+      const unreadCount = messages.filter((message) => (
+        message.sender === 'USER' && message.isRead === false
+      )).length;
+
+      return {
+        chatId: chat._id,
+        userId: chat.userId?._id || chat.userId,
+        _id: chat.userId?._id || chat.userId,
+        username: chat.userId?.username || 'User',
+        email: chat.userId?.email || null,
+        lastMessage: lastMessage?.text || '',
+        lastMessageAt: chat.lastMessageAt,
+        unreadCount,
+      };
+    });
+
+    return res.status(200).json({ conversations });
+  } catch (error) {
+    logger.error('getSupportConversations error', { error: error.message });
+    return res.status(500).json({ message: 'Failed to get support conversations' });
+  }
+};
+
+const getSupportChatByUser = async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+
+    const chat = await Chat.findOne({
+      chatType: 'SUPPORT',
+      userId: targetUserId,
+    }).lean();
+
+    if (chat) {
+      await Chat.updateOne(
+        { _id: chat._id },
+        { $set: { 'messages.$[elem].isRead': true } },
+        { arrayFilters: [{ 'elem.sender': 'USER', 'elem.isRead': false }] }
+      );
+    }
+
+    const messages = (chat?.messages || []).map((message) => ({
+      _id: `${chat._id}:${message.senderId}:${new Date(message.createdAt).getTime()}`,
+      sender: message.sender,
+      senderId: message.senderId,
+      text: message.text,
+      message: message.text,
+      isAdmin: message.sender === 'ADMIN',
+      isRead: message.isRead,
+      createdAt: message.createdAt,
+    }));
+
+    return res.status(200).json({
+      chat: chat || { messages: [] },
+      messages,
+    });
+  } catch (error) {
+    logger.error('getSupportChatByUser error', { error: error.message });
     return res.status(500).json({ message: 'Failed to get support chat' });
   }
 };
@@ -331,5 +425,7 @@ module.exports = {
   getDirectChatHistory,
   sendSupportMessage,
   getSupportChatHistory,
+  getSupportConversations,
+  getSupportChatByUser,
   replySupportMessage,
 };

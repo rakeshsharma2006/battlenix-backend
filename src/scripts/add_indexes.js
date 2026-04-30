@@ -46,8 +46,46 @@ const addIndexes = async () => {
     console.log('Payment indexes created');
 
     // Chat
-    await db.collection('chats').createIndex({ matchId: 1, userId: 1 });
-    await db.collection('chats').createIndex({ chatType: 1, userId: 1 });
+    const chatIndexes = await db.collection('chats').indexes();
+    for (const index of chatIndexes) {
+      const isOldChatUnique =
+        index.unique === true &&
+        index.key?.matchId === 1 &&
+        index.key?.userId === 1 &&
+        Object.keys(index.key).length === 2;
+
+      if (isOldChatUnique) {
+        console.log(`Dropping old chat unique index: ${index.name}`);
+        await db.collection('chats').dropIndex(index.name);
+      }
+    }
+
+    await db.collection('chats').createIndex(
+      { chatType: 1, matchId: 1, userId: 1 },
+      {
+        unique: true,
+        partialFilterExpression: { chatType: 'ROOM' },
+        name: 'room_chat_unique',
+      }
+    );
+    await db.collection('chats').createIndex(
+      { chatType: 1, userId: 1 },
+      {
+        unique: true,
+        partialFilterExpression: { chatType: 'SUPPORT' },
+        name: 'support_chat_unique',
+      }
+    );
+    await db.collection('chats').createIndex(
+      { chatType: 1, userId: 1, receiverId: 1 },
+      {
+        unique: true,
+        partialFilterExpression: { chatType: 'DIRECT' },
+        name: 'direct_chat_unique',
+      }
+    );
+    await db.collection('chats').createIndex({ matchId: 1, matchCreatedBy: 1 });
+    await db.collection('chats').createIndex({ userId: 1, lastMessageAt: -1 });
     await db.collection('chats').createIndex({ lastMessageAt: -1 });
     console.log('Chat indexes created');
 
