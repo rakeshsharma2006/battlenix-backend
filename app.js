@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const mongoSanitize = require('mongo-sanitize');
 const hpp = require('hpp');
+const path = require('path');
 const routes = require('./src/routes');
 const passport = require('./src/config/passport');
 const { globalLimiter, authLimiter, paymentLimiter } = require('./src/middlewares/rateLimiters');
@@ -167,6 +168,8 @@ app.use(haltOnTimedout);
 
 app.use(passport.initialize());
 app.use(haltOnTimedout);
+
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use(globalLimiter);
 app.use('/auth/login', authLimiter);

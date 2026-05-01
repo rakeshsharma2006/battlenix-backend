@@ -1,5 +1,5 @@
 const SupportTicket = require('../models/SupportTicket');
-const { cloudinary } = require('../config/cloudinary');
+const { hasCloudinaryConfig } = require('../config/cloudinary');
 const { emitToUser } = require('../services/socketService');
 const logger = require('../utils/logger');
 
@@ -22,6 +22,14 @@ const parseDeviceInfo = (deviceInfo) => {
   }
 };
 
+const getScreenshotUrl = (file) => {
+  if (file.path && /^https?:\/\//i.test(file.path)) {
+    return file.path;
+  }
+
+  return `/uploads/support-tickets/${file.filename}`;
+};
+
 // ── USER ENDPOINTS ──
 
 // Create new ticket
@@ -42,7 +50,7 @@ const createTicket = async (req, res) => {
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         screenshots.push({
-          url: file.path,
+          url: getScreenshotUrl(file),
           publicId: file.filename,
         });
       }
@@ -64,6 +72,8 @@ const createTicket = async (req, res) => {
       ticketNumber: ticket.ticketNumber,
       userId,
       category,
+      screenshotCount: screenshots.length,
+      storage: hasCloudinaryConfig ? 'cloudinary' : 'local',
     });
 
     return res.status(201).json({
@@ -73,6 +83,7 @@ const createTicket = async (req, res) => {
   } catch (error) {
     logger.error('createTicket error', {
       error: error.message,
+      stack: error.stack,
     });
     return res.status(500).json({
       message: 'Failed to create ticket',

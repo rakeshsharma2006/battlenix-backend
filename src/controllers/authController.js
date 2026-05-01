@@ -17,6 +17,12 @@ const buildUserPayload = (user) => ({
   gameUID: user.gameUID ?? null,
   gameName: user.gameName ?? null,
   upiId: user.upiId ?? null,
+  bgmiUID: user.bgmiUID ?? null,
+  bgmiName: user.bgmiName ?? null,
+  bgmiUpiId: user.bgmiUpiId ?? null,
+  ffUID: user.ffUID ?? null,
+  ffName: user.ffName ?? null,
+  ffUpiId: user.ffUpiId ?? null,
 });
 
 const buildAuthResponse = async (user, message) => {
@@ -371,7 +377,7 @@ const refresh = async (req, res) => {
     const rotated = await rotateRefreshToken(refreshToken);
 
     const user = await User.findById(rotated.userId)
-      .select('email role username trustScore gameUID gameName upiId')
+      .select('email role username trustScore gameUID gameName upiId bgmiUID bgmiName bgmiUpiId ffUID ffName ffUpiId')
       .lean();
 
     if (!user) {

@@ -3,6 +3,7 @@ const router = express.Router();
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 const { uploadScreenshot } = require('../config/cloudinary');
+const logger = require('../utils/logger');
 const {
   createTicket,
   getUserTickets,
@@ -16,6 +17,10 @@ const {
 const handleScreenshotUpload = (req, res, next) => {
   uploadScreenshot.array('screenshots', 3)(req, res, (error) => {
     if (error) {
+      logger.warn('Support screenshot upload failed', {
+        error: error.message,
+        userId: req.user?._id,
+      });
       return res.status(400).json({
         message: error.message || 'Screenshot upload failed',
       });
