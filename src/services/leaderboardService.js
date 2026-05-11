@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Leaderboard = require('../models/Leaderboard');
 const MatchResult = require('../models/MatchResult');
+const Payment = require('../models/Payment');
 const User = require('../models/User');
 const JobLock = require('../models/JobLock');
 const logger = require('../utils/logger');
@@ -314,91 +315,67 @@ const getLeaderboardPage = async (scope, query) => {
 };
 
 const getPublicLeaderboardPage = async (query) => {
-  const data = await getLeaderboardPage('global', query);
-  const userIds = data.leaderboard
-    .map((entry) => String(entry.userId || ''))
-    .filter(Boolean);
+  const page = Number(query.page) || 1;
+  const limit = Math.min(Number(query.limit) || 100, 100);
+  const skip = (page - 1) * limit;
 
-  if (userIds.length === 0) {
-    return {
-      leaderboard: [],
-      pagination: data.pagination,
-    };
-  }
-
-  const objectIds = userIds.map((userId) => new mongoose.Types.ObjectId(userId));
-  const prizeExpression = {
-    $cond: [
-      { $gt: ['$match.prizeAmount', 0] },
-      '$match.prizeAmount',
-      {
-        $cond: [
-          { $gt: ['$match.prizeBreakdown.prizePerMember', 0] },
-          '$match.prizeBreakdown.prizePerMember',
-          '$match.prizeBreakdown.playerPrize',
-        ],
-      },
-    ],
-  };
-
-  const [users, earningsRows] = await Promise.all([
-    User.find({ _id: { $in: objectIds } })
-      .select('_id trustScore')
-      .lean(),
-    MatchResult.aggregate([
-      {
-        $match: {
-          userId: { $in: objectIds },
-          isWinner: true,
-        },
-      },
-      {
-        $lookup: {
-          from: 'matches',
-          localField: 'matchId',
-          foreignField: '_id',
-          as: 'match',
-        },
-      },
-      { $unwind: '$match' },
+  const [rows, totalRows] = await Promise.all([
+    Payment.aggregate([
+      { $match: { status: 'SUCCESS' } },
       {
         $group: {
           _id: '$userId',
-          earnings: {
-            $sum: prizeExpression,
-          },
+          totalEarnings: { $sum: '$amount' },
+        },
+      },
+      { $sort: { totalEarnings: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      {
+        $project: {
+          userId: '$_id',
+          username: '$user.username',
+          avatar: '$user.avatar',
+          trustScore: '$user.trustScore',
+          earnings: '$totalEarnings',
+          totalEarnings: 1,
         },
       },
     ]),
+    Payment.aggregate([
+      { $match: { status: 'SUCCESS' } },
+      { $group: { _id: '$userId' } },
+      { $count: 'total' },
+    ]),
   ]);
 
-  const trustScoreByUserId = new Map(
-    users.map((user) => [
-      String(user._id),
-      Number(user.trustScore) || 0,
-    ])
-  );
-  const earningsByUserId = new Map(
-    earningsRows.map((entry) => [
-      String(entry._id),
-      Number(entry.earnings) || 0,
-    ])
-  );
+  const total = Number(totalRows[0]?.total) || 0;
 
   return {
-    leaderboard: data.leaderboard.map((entry, index) => {
-      const userId = String(entry.userId || '');
-      return {
-        userId,
-        username: entry.username?.toString() || 'Unknown',
-        wins: Number(entry.totalWins) || 0,
-        totalMatches: Number(entry.totalMatches) || 0,
-        earnings: earningsByUserId.get(userId) || 0,
-        trustScore: trustScoreByUserId.get(userId) || 0,
-        rank: Number(entry.rank) || index + 1,
-      };
-    }),
-    pagination: data.pagination,
+    leaderboard: rows.map((entry, index) => ({
+      userId: String(entry.userId || ''),
+      username: entry.username?.toString() || 'Unknown',
+      avatar: entry.avatar || null,
+      trustScore: Number(entry.trustScore) || 0,
+      earnings: Number(entry.earnings) || 0,
+      totalEarnings: Number(entry.totalEarnings) || Number(entry.earnings) || 0,
+      rank: skip + index + 1,
+    })),
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit) || 1,
+    },
   };
 };
 

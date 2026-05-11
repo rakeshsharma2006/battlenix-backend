@@ -33,6 +33,7 @@ const getMyProfile = async (req, res) => {
         .select('username email gameUID gameName upiId ' +
                 'bgmiUID bgmiName bgmiUpiId ' +
                 'ffUID ffName ffUpiId ' +
+                'bgmiUidSetAt ffUidSetAt ' +
                 'avatar trustScore createdAt role isFlagged isBanned')
         .lean(),
       Leaderboard.findOne({ userId })
@@ -61,10 +62,12 @@ const getMyProfile = async (req, res) => {
         bgmiUID: user.bgmiUID || null,
         bgmiName: user.bgmiName || null,
         bgmiUpiId: user.bgmiUpiId || null,
+        bgmiUidSetAt: user.bgmiUidSetAt || null,
 
         ffUID: user.ffUID || null,
         ffName: user.ffName || null,
         ffUpiId: user.ffUpiId || null,
+        ffUidSetAt: user.ffUidSetAt || null,
 
         // Legacy fallback
         gameUID: user.gameUID || user.bgmiUID || null,
@@ -197,6 +200,85 @@ const updateMyProfile = async (req, res) => {
       });
     }
 
+    const user = await User.findById(req.user._id)
+      .select('username bgmiUID ffUID bgmiUidSetAt ffUidSetAt')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (updates.username !== undefined) {
+      const username = updates.username;
+
+      if (!username || !/^[a-zA-Z0-9]{3,30}$/.test(username)) {
+        return res.status(400).json({
+          message: 'Username must be 3-30 letters or numbers',
+        });
+      }
+
+      const usernameOwner = await User.findOne({
+        username: new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+        _id: { $ne: req.user._id },
+      })
+        .select('_id')
+        .lean();
+
+      if (usernameOwner) {
+        return res.status(409).json({ message: 'Username is already taken' });
+      }
+    }
+
+    const remainingUidLockDays = (setAt) => {
+      if (!setAt) return 0;
+      const daysSinceSet = Math.floor(
+        (Date.now() - new Date(setAt).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      return Math.max(0, 10 - daysSinceSet);
+    };
+
+    const enforceUidLock = ({ uidField, setAtField, label }) => {
+      if (updates[uidField] === undefined) {
+        return null;
+      }
+
+      const nextUid = updates[uidField];
+      const existingUid = user[uidField];
+      const isChangingExistingUid =
+        existingUid && String(nextUid || '') !== String(existingUid);
+
+      if (isChangingExistingUid) {
+        const daysRemaining = remainingUidLockDays(user[setAtField]);
+        if (daysRemaining > 0) {
+          return `${label} UID is locked for ${daysRemaining} more days`;
+        }
+      }
+
+      if (nextUid && String(nextUid) !== String(existingUid || '')) {
+        updates[setAtField] = new Date();
+      }
+
+      return null;
+    };
+
+    const bgmiLockError = enforceUidLock({
+      uidField: 'bgmiUID',
+      setAtField: 'bgmiUidSetAt',
+      label: 'BGMI',
+    });
+    if (bgmiLockError) {
+      return res.status(400).json({ message: bgmiLockError });
+    }
+
+    const ffLockError = enforceUidLock({
+      uidField: 'ffUID',
+      setAtField: 'ffUidSetAt',
+      label: 'Free Fire',
+    });
+    if (ffLockError) {
+      return res.status(400).json({ message: ffLockError });
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
@@ -205,6 +287,7 @@ const updateMyProfile = async (req, res) => {
     .select('username email gameUID gameName upiId ' +
             'bgmiUID bgmiName bgmiUpiId ' +
             'ffUID ffName ffUpiId ' +
+            'bgmiUidSetAt ffUidSetAt ' +
             'avatar trustScore createdAt role ' +
             'isFlagged isBanned')
     .lean();

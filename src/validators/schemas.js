@@ -304,10 +304,12 @@ const playerSchemas = {
     bgmiUID: z.string().trim().max(50).optional(),
     bgmiName: z.string().trim().max(50).optional(),
     bgmiUpiId: z.string().trim().min(5).max(100).optional(),
+    bgmiUidSetAt: z.string().trim().optional(),
 
     ffUID: z.string().trim().max(50).optional(),
     ffName: z.string().trim().max(50).optional(),
     ffUpiId: z.string().trim().min(5).max(100).optional(),
+    ffUidSetAt: z.string().trim().optional(),
 
     // Legacy — keep accepting for old app versions
     gameUID: z.string().trim().max(50).optional(),

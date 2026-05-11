@@ -30,7 +30,7 @@ const sendPasswordResetEmail = async (email, resetToken) => {
           Reset Password
         </a>
         <p style="color:#666;margin-top:24px;font-size:13px">
-          ⏱ This link is valid for <strong>15 minutes</strong> only.<br>
+          This link is valid for <strong>10 minutes</strong> only.<br>
           If you didn't request a password reset, you can safely ignore this email.
         </p>
         <hr style="border-color:#1a1a2e;margin-top:24px">

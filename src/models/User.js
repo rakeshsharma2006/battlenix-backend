@@ -45,7 +45,7 @@ const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      default: null,
+      default: undefined,
       trim: true,
       minlength: 3,
       maxlength: 30,
@@ -128,6 +128,10 @@ const userSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    bgmiUidSetAt: {
+      type: Date,
+      default: null,
+    },
 
     ffUID: {
       type: String,
@@ -143,6 +147,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
       trim: true,
+    },
+    ffUidSetAt: {
+      type: Date,
+      default: null,
+    },
+    passwordResetToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    passwordResetExpiry: {
+      type: Date,
+      default: null,
+      select: false,
     },
     // ── Referral fields ──────────────────────────────────────────────────
     referralCode: {
