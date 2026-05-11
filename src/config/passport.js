@@ -4,16 +4,6 @@ const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const User = require('../models/User');
 const logger = require('../utils/logger');
 
-const buildGoogleUsername = (displayName = 'player') => {
-  const baseUsername = displayName
-    .replace(/\s+/g, '_')
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '')
-    .slice(0, 20);
-
-  return baseUsername || 'player';
-};
-
 const generateTemporaryPassword = () => crypto.randomBytes(32).toString('hex');
 const isGoogleOAuthConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -37,18 +27,14 @@ if (isGoogleOAuthConfigured) {
 
           const avatar = profile.photos?.[0]?.value || null;
 
-          let user = await User.findOne({
-            $or: [
-              { googleId: profile.id },
-              { email },
-            ],
-          });
+          let user = await User.findOne({ googleId: profile.id });
 
           if (!user) {
-            const baseUsername = buildGoogleUsername(profile.displayName);
+            user = await User.findOne({ email });
+          }
 
+          if (!user) {
             user = await User.create({
-              username: `${baseUsername}_${Date.now().toString().slice(-5)}`,
               email,
               password: generateTemporaryPassword(),
               googleId: profile.id,
@@ -56,6 +42,12 @@ if (isGoogleOAuthConfigured) {
               role: 'user',
             });
           } else {
+            if (user.googleId && user.googleId !== profile.id) {
+              return done(null, false, {
+                message: 'This email is linked to a different Google account',
+              });
+            }
+
             let dirty = false;
 
             if (!user.googleId) {

@@ -47,37 +47,11 @@ const authSchemas = {
     refreshToken: z.string().trim().min(1),
   }).strict(),
   googleSignInBody: z.object({
-    idToken: z.string().trim().min(1).optional(),
-    credential: z.string().trim().min(1).optional(),
-    token: z.string().trim().min(1).optional(),
-  }).strict().superRefine((data, ctx) => {
-    if (!data.idToken && !data.credential && !data.token) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['idToken'],
-        message: 'Google idToken is required',
-      });
-    }
-  }).transform((data) => ({
-    idToken: data.idToken || data.credential || data.token,
-  })),
+    googleToken: z.string().trim().min(1, 'googleToken is required'),
+  }).strict(),
   googleVerifyBody: z.object({
-    idToken: z.string().trim().min(1).optional(),
-    credential: z.string().trim().min(1).optional(),
-    token: z.string().trim().min(1).optional(),
-    googleToken: z.string().trim().min(1).optional(),
-    email: z.string().trim().email().optional(),
-    displayName: z.string().trim().min(1).max(100).optional(),
-    googleId: z.string().trim().min(1).optional(),
-  }).strict().superRefine((data, ctx) => {
-    if (!data.idToken && !data.credential && !data.token && !data.googleToken && !data.email) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['idToken'],
-        message: 'Either a Google token or email is required',
-      });
-    }
-  }),
+    googleToken: z.string().trim().min(1, 'googleToken is required'),
+  }).strict(),
 };
 
 const paymentSchemas = {

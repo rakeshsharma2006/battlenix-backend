@@ -15,7 +15,7 @@ const logger = require('../utils/logger');
 
 const REFERRAL_BASE_URL = process.env.REFERRAL_BASE_URL || 'https://yourdomain.com';
 const APP_DOWNLOAD_URL = process.env.APP_DOWNLOAD_URL || 'https://yourdomain.com/download';
-const PLAYSTORE_PACKAGE = process.env.PLAYSTORE_PACKAGE || 'com.battlenix.app';
+const PLAYSTORE_PACKAGE = process.env.PLAYSTORE_PACKAGE || 'com.battlenix.esports';
 
 const buildReferralLink = (code) => `${REFERRAL_BASE_URL}/r/${code}`;
 
@@ -469,7 +469,7 @@ const validateCode = async (req, res) => {
 const trackReferralClick = async (req, res) => {
   // Validate redirect URL once
   const safeUrl = process.env.APP_DOWNLOAD_URL
-    || 'https://play.google.com/store/apps/details?id=com.battlenix';
+    || 'https://play.google.com/store/apps/details?id=com.battlenix.esports';
 
   try {
     new URL(safeUrl);

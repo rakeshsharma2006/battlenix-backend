@@ -17,7 +17,7 @@ const ensureGoogleOAuthConfigured = (req, res, next) => {
 };
 
 // POST /auth/google
-// Body: { idToken: "<google_id_token>" }
+// Body: { googleToken: "<google_id_token>" }
 // Returns the app JWT pair after verifying the Google ID token server-side.
 router.post('/google', authLimiter, validate({ body: authSchemas.googleSignInBody }), googleSignIn);
 
@@ -48,8 +48,11 @@ router.get(
       redirectUrl.searchParams.set('accessToken', tokens.accessToken);
       redirectUrl.searchParams.set('refreshToken', tokens.refreshToken);
       redirectUrl.searchParams.set('userId', String(user._id));
-      redirectUrl.searchParams.set('username', user.username);
       redirectUrl.searchParams.set('email', user.email);
+
+      if (user.username) {
+        redirectUrl.searchParams.set('username', user.username);
+      }
 
       if (user.avatar) {
         redirectUrl.searchParams.set('avatar', user.avatar);
@@ -67,9 +70,8 @@ router.get('/google/failed', (req, res) => {
   return res.status(401).json({ message: 'Google login failed' });
 });
 
-// Compatibility alias for older mobile clients. It now enforces the same
-// verified Google ID token contract as POST /auth/google, while also
-// accepting the older `{ email, displayName, googleId }` payload.
+// Compatibility alias for mobile clients. It enforces the same verified
+// Google ID token contract as POST /auth/google.
 router.post('/google/verify', authLimiter, validate({ body: authSchemas.googleVerifyBody }), googleVerify);
 
 module.exports = router;

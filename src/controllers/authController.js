@@ -6,8 +6,19 @@ const logger = require('../utils/logger');
 const { sendPasswordResetEmail } = require('../services/emailService');
 const { issueAuthTokens, rotateRefreshToken, signAccessToken } = require('../services/tokenService');
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+const GOOGLE_WEB_CLIENT_ID =
+  '460641904031-5hl7dsf0msmg4f1b9fvkjmsnrt3geu85.apps.googleusercontent.com';
+const googleOAuthClient = new OAuth2Client();
+
+const getGoogleClientId = () => {
+  const configuredClientId = (process.env.GOOGLE_CLIENT_ID || GOOGLE_WEB_CLIENT_ID).trim();
+
+  if (configuredClientId !== GOOGLE_WEB_CLIENT_ID) {
+    throw new Error('GOOGLE_CLIENT_ID must match the configured BattleNix Web Client ID');
+  }
+
+  return configuredClientId;
+};
 
 const buildUserPayload = (user) => ({
   _id: user._id,
@@ -46,7 +57,15 @@ const hashForLog = (value = '') => crypto
   .slice(0, 16);
 
 const buildGoogleAuthResponse = async (user, message = 'Google sign-in successful') => {
+  logger.info('Generating JWTs for Google login', {
+    userId: user._id,
+  });
+
   const tokens = await issueAuthTokens(user);
+
+  logger.info('JWT generation completed for Google login', {
+    userId: user._id,
+  });
 
   return {
     success: true,
@@ -62,48 +81,21 @@ const buildGoogleAuthResponse = async (user, message = 'Google sign-in successfu
   };
 };
 
-const buildGoogleUsername = (displayName = 'player') => {
-  const baseUsername = displayName
-    .replace(/\s+/g, '_')
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '')
-    .slice(0, 20);
-
-  return baseUsername || 'player';
-};
-
 const generateTemporaryPassword = () => crypto.randomBytes(32).toString('hex');
-
-const generateUniqueGoogleUsername = async (displayName, email) => {
-  const fallbackName = displayName || email?.split('@')[0] || 'player';
-  const baseUsername = buildGoogleUsername(fallbackName);
-  let username = baseUsername;
-  let suffix = 1;
-
-  while (await User.exists({ username })) {
-    const suffixValue = String(suffix);
-    username = `${baseUsername.slice(0, Math.max(1, 20 - suffixValue.length))}${suffixValue}`;
-    suffix += 1;
-  }
-
-  return username;
-};
 
 const findOrCreateGoogleUser = async ({
   email,
-  googleId = null,
-  displayName = null,
+  googleId,
+  name = null,
   avatar = null,
   source = 'google',
 }) => {
   const normalizedEmail = email.toLowerCase().trim();
-  const googleLookup = googleId ? [{ googleId }] : [];
-  let user = await User.findOne({
-    $or: [
-      { email: normalizedEmail },
-      ...googleLookup,
-    ],
-  });
+  let user = await User.findOne({ googleId });
+
+  if (!user) {
+    user = await User.findOne({ email: normalizedEmail });
+  }
 
   if (!user) {
     user = await User.create({
@@ -117,15 +109,26 @@ const findOrCreateGoogleUser = async ({
     logger.info('New user created via Google Sign-In', {
       source,
       userId: user._id,
-      email: normalizedEmail,
+      emailHash: hashForLog(normalizedEmail),
+      googleId,
+      hasName: Boolean(name),
     });
 
     return user;
   }
 
+  if (user.googleId && user.googleId !== googleId) {
+    logger.warn('Google login rejected: email belongs to a different Google account', {
+      userId: user._id,
+      emailHash: hashForLog(normalizedEmail),
+      providedGoogleId: googleId,
+    });
+    throw new Error('GOOGLE_ACCOUNT_MISMATCH');
+  }
+
   let isDirty = false;
 
-  if (!user.googleId && googleId) {
+  if (!user.googleId) {
     user.googleId = googleId;
     isDirty = true;
   }
@@ -142,10 +145,77 @@ const findOrCreateGoogleUser = async ({
   logger.info('Existing user signed in via Google', {
     source,
     userId: user._id,
-    email: normalizedEmail,
+    emailHash: hashForLog(normalizedEmail),
+    googleId,
+    hasName: Boolean(name),
   });
 
   return user;
+};
+
+const mapGoogleVerificationError = (error) => {
+  const message = error?.message || '';
+
+  if (/expired/i.test(message)) {
+    return 'Google ID token has expired';
+  }
+
+  if (/audience|recipient|aud/i.test(message)) {
+    return 'Google ID token was issued for a different client';
+  }
+
+  return 'Invalid Google ID token';
+};
+
+const verifyGoogleIdToken = async (googleToken) => {
+  const clientId = getGoogleClientId();
+
+  logger.info('Verifying Google ID token', {
+    audience: clientId,
+  });
+
+  const ticket = await googleOAuthClient.verifyIdToken({
+    idToken: googleToken,
+    audience: clientId,
+  });
+
+  const payload = ticket.getPayload();
+  const {
+    sub: googleId,
+    email,
+    email_verified: emailVerified,
+    name,
+    picture,
+    aud,
+    iss,
+  } = payload || {};
+
+  logger.info('Google ID token payload verified', {
+    googleId,
+    emailHash: hashForLog(email),
+    emailVerified,
+    audience: aud,
+    issuer: iss,
+    hasName: Boolean(name),
+    hasPicture: Boolean(picture),
+  });
+
+  if (
+    aud !== clientId ||
+    !['accounts.google.com', 'https://accounts.google.com'].includes(iss) ||
+    !googleId ||
+    !email ||
+    emailVerified !== true
+  ) {
+    throw new Error('Invalid Google ID token payload');
+  }
+
+  return {
+    googleId,
+    email,
+    name: name || null,
+    picture: picture || null,
+  };
 };
 
 const register = async (req, res) => {
@@ -549,80 +619,82 @@ const resetPassword = async (req, res) => {
   }
 };
 
-const googleSignIn = async (req, res) => {
+const completeGoogleTokenLogin = async (req, res, source) => {
   try {
-    const idToken = req.body.idToken || req.body.credential || req.body.token || req.body.googleToken;
+    const { googleToken } = req.body;
 
-    if (!idToken) {
-      return res.status(400).json({ success: false, message: 'idToken is required' });
-    }
-
-    if (!GOOGLE_CLIENT_ID) {
-      logger.error('Google Sign-In misconfigured: GOOGLE_CLIENT_ID env var is missing');
-      return res.status(500).json({ success: false, message: 'Server auth configuration error' });
-    }
-
-    let ticket;
-    try {
-      ticket = await googleOAuthClient.verifyIdToken({
-        idToken,
-        audience: GOOGLE_CLIENT_ID,
+    if (!googleToken) {
+      logger.warn('Google login failed: missing googleToken', { source });
+      return res.status(400).json({
+        success: false,
+        message: 'googleToken is required',
       });
-    } catch (verifyErr) {
-      logger.warn('Google idToken verification failed', { error: verifyErr.message });
-      return res.status(401).json({ success: false, message: 'Google login failed' });
     }
 
-    const payload = ticket.getPayload();
-    const { sub: googleId, email, email_verified: emailVerified, name, picture } = payload;
+    let googlePayload;
+    try {
+      googlePayload = await verifyGoogleIdToken(googleToken);
+    } catch (verifyErr) {
+      if (/GOOGLE_CLIENT_ID/.test(verifyErr.message)) {
+        logger.error('Google Sign-In misconfigured', {
+          source,
+          error: verifyErr.message,
+        });
+        return res.status(500).json({
+          success: false,
+          message: 'Server auth configuration error',
+        });
+      }
 
-    if (!email || emailVerified !== true) {
-      return res.status(401).json({ success: false, message: 'Google login failed' });
+      const message = mapGoogleVerificationError(verifyErr);
+      logger.warn('Google token verification failed', {
+        source,
+        reason: message,
+        error: verifyErr.message,
+      });
+      return res.status(401).json({ success: false, message });
     }
 
     const user = await findOrCreateGoogleUser({
-      email,
-      googleId,
-      displayName: name,
-      avatar: picture || null,
-      source: 'verified_id_token',
+      email: googlePayload.email,
+      googleId: googlePayload.googleId,
+      name: googlePayload.name,
+      avatar: googlePayload.picture,
+      source,
     });
 
-    return res.status(200).json(await buildGoogleAuthResponse(user));
+    const response = await buildGoogleAuthResponse(user);
+
+    logger.info('Google login success', {
+      source,
+      userId: user._id,
+      googleId: googlePayload.googleId,
+      requiresUsername: response.requiresUsername,
+    });
+
+    return res.status(200).json(response);
   } catch (error) {
-    logger.error('Google Sign-In error', { error: error.message });
+    if (error.message === 'GOOGLE_ACCOUNT_MISMATCH') {
+      return res.status(409).json({
+        success: false,
+        message: 'This email is linked to a different Google account',
+      });
+    }
+
+    logger.error('Google Sign-In error', { source, error: error.message });
     return res.status(500).json({ success: false, message: 'Google login failed' });
   }
 };
 
+const googleSignIn = async (req, res) => completeGoogleTokenLogin(
+  req,
+  res,
+  'auth_google'
+);
+
 const googleVerify = async (req, res) => {
   try {
-    const verifiedToken = req.body.idToken || req.body.credential || req.body.token || req.body.googleToken;
-
-    if (verifiedToken) {
-      req.body.idToken = verifiedToken;
-      return googleSignIn(req, res);
-    }
-
-    const { email, displayName, googleId } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ success: false, message: 'Email is required' });
-    }
-
-    logger.warn('Using legacy Google verify fallback without ID token verification', {
-      email: email.toLowerCase().trim(),
-      googleId: googleId || null,
-    });
-
-    const user = await findOrCreateGoogleUser({
-      email,
-      googleId: googleId || null,
-      displayName: displayName || null,
-      source: 'legacy_verify',
-    });
-
-    return res.status(200).json(await buildGoogleAuthResponse(user));
+    return completeGoogleTokenLogin(req, res, 'auth_google_verify');
   } catch (error) {
     logger.error('Google verify error', { error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: 'Google login failed' });
